@@ -1,0 +1,38 @@
+/* COMPLETE ISOLATION */
+#dashboard-isolation-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+  background: #f5f7fa;
+  overflow-y: auto;
+}
+
+.dashboard-isolation-container {
+  min-height: 100vh;
+  width: 100%;
+  isolation: isolate;
+  contain: content;
+  all: initial;
+}
+
+/* Reset EVERYTHING inside */
+#dashboard-isolation-wrapper *,
+#dashboard-isolation-wrapper *::before,
+#dashboard-isolation-wrapper *::after {
+  all: unset;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* But keep pointer events */
+#dashboard-isolation-wrapper * {
+  pointer-events: auto;
+}
+
+/* Hide home page when dashboard is active */
+body.dashboard-is-active > div:not(#dashboard-isolation-wrapper) {
+  display: none !important;
+}

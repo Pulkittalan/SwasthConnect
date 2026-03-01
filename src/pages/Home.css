@@ -1,0 +1,23 @@
+/* Home.css */
+.App {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Ensure the content starts right after navbar */
+.App > *:not(:first-child) {
+  margin-top: 0;
+}
+/* Home.css */
+.home-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Ensure proper spacing */
+.home-container > * {
+  width: 100%;
+}

@@ -1,0 +1,441 @@
+.telemedicine-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e3f2fd 100%);
+  color: #333;
+  padding: 20px;
+  margin-top: 80px;
+}
+
+.telemedicine-header {
+  text-align: center;
+  background: linear-gradient(135deg, #2196f3, #7e57c2);
+  color: white;
+  padding: 40px 20px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 1s ease-out;
+}
+
+.telemedicine-header h1 {
+  font-size: 2.8rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.welcome-text {
+  font-size: 1.2rem;
+  opacity: 0.9;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.telemedicine-main {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.telemedicine-section {
+  background: white;
+  padding: 30px;
+  margin: 30px 0;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  animation: slideUp 0.6s ease-out;
+}
+
+.telemedicine-section h2 {
+  color: #2196f3;
+  margin-bottom: 15px;
+  font-size: 1.8rem;
+  border-bottom: 2px solid #e3f2fd;
+  padding-bottom: 10px;
+}
+
+.telemedicine-section p {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+/* Video Call Styles */
+.video-call-container {
+  background: #f8fdff;
+  padding: 25px;
+  border-radius: 10px;
+  border: 1px solid #e1f5fe;
+}
+
+.video-wrapper {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.video-box {
+  flex: 1;
+  min-width: 300px;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.video-box h4 {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: white;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  z-index: 1;
+}
+
+video {
+  width: 100%;
+  height: 300px;
+  object-fit: cover;
+  background: #222;
+}
+
+video.active {
+  border: 3px solid #4caf50;
+}
+
+video.inactive {
+  border: 3px solid #ddd;
+  background: linear-gradient(45deg, #333 25%, #444 25%, #444 50%, #333 50%, #333 75%, #444 75%);
+  background-size: 40px 40px;
+}
+
+/* Button Styles */
+.button-group {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  padding: 12px 28px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  min-width: 180px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1976d2, #0d47a1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.btn-primary:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  padding: 12px 28px;
+  font-size: 1rem;
+  border: 2px solid #f44336;
+  border-radius: 8px;
+  background: white;
+  color: #f44336;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  min-width: 180px;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f44336;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.btn-secondary:disabled {
+  border-color: #cccccc;
+  color: #cccccc;
+  cursor: not-allowed;
+}
+
+/* Messaging Styles */
+.chat-container {
+  background: #fff9f0;
+  padding: 25px;
+  border-radius: 10px;
+  border: 1px solid #ffe0b2;
+}
+
+.chat-box {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.messages-container {
+  height: 300px;
+  overflow-y: auto;
+  padding: 20px;
+  background: #fafafa;
+  border-bottom: 1px solid #eee;
+}
+
+.message {
+  margin-bottom: 15px;
+  max-width: 80%;
+}
+
+.message.sent {
+  margin-left: auto;
+}
+
+.message.received {
+  margin-right: auto;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.message.sent .message-header {
+  color: #2196f3;
+}
+
+.message.received .message-header {
+  color: #4caf50;
+}
+
+.message-time {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.message-content {
+  background: white;
+  padding: 12px 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.message.sent .message-content {
+  background: #e3f2fd;
+  border-top-right-radius: 2px;
+}
+
+.message.received .message-content {
+  background: #f1f8e9;
+  border-top-left-radius: 2px;
+}
+
+.message-input-container {
+  display: flex;
+  padding: 15px;
+  gap: 10px;
+}
+
+.message-input-container input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.message-input-container input:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.auth-notice {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+  padding: 15px;
+  border-radius: 6px;
+  margin-top: 15px;
+  text-align: center;
+}
+
+/* Prescription Styles */
+.prescription-container {
+  background: #f8f9fa;
+  padding: 25px;
+  border-radius: 10px;
+  border: 1px solid #e9ecef;
+}
+
+.prescription-header {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid #2196f3;
+}
+
+.doctor-name {
+  color: #2196f3;
+  font-size: 1.1rem;
+  margin: 10px 0;
+}
+
+.prescription-date {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.prescription-content {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  border: 1px solid #e0e0e0;
+}
+
+.prescription-actions {
+  text-align: center;
+  margin-top: 25px;
+}
+
+/* Contact Info */
+.contact-info {
+  background: #e8f5e9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.contact-info p {
+  margin: 5px 0;
+  color: #2e7d32;
+}
+
+/* Footer */
+.telemedicine-footer {
+  text-align: center;
+  padding: 30px 20px;
+  margin-top: 40px;
+  color: #666;
+  border-top: 1px solid #ddd;
+}
+
+.disclaimer {
+  font-size: 0.9rem;
+  max-width: 800px;
+  margin: 15px auto;
+  color: #888;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .telemedicine-page {
+    padding: 10px;
+    margin-top: 70px;
+  }
+
+  .telemedicine-header h1 {
+    font-size: 2rem;
+  }
+
+  .telemedicine-section {
+    padding: 20px;
+    margin: 20px 0;
+  }
+
+  .video-wrapper {
+    flex-direction: column;
+  }
+
+  .video-box {
+    min-width: 100%;
+  }
+
+  video {
+    height: 250px;
+  }
+
+  .button-group {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .btn-primary, .btn-secondary {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+}
+
+@media (max-width: 480px) {
+  .telemedicine-header {
+    padding: 25px 15px;
+  }
+
+  .telemedicine-header h1 {
+    font-size: 1.6rem;
+  }
+
+  .telemedicine-section h2 {
+    font-size: 1.4rem;
+  }
+
+  .message-input-container {
+    flex-direction: column;
+  }
+
+  .message-input-container button {
+    width: 100%;
+  }
+}
+
+/* Scrollbar Styling */
+.messages-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}

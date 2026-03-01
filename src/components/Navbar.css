@@ -1,0 +1,317 @@
+img {
+  background: transparent !important;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(90deg, #0f2027, #319fad, #4074e6);
+  padding: 8px 20px;
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: 110px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.navbar-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.logo {
+  position: relative;
+  top: 0px;
+  right: 9px;
+  width: 90px;
+  height: 90px;
+  margin-right: 10px;
+}
+
+.logo-title {
+  position: relative;
+  left: -0.9%;
+  font-size: 30px;
+  font-weight: bold;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.nav-links {
+  display: flex;
+  list-style: none;
+}
+
+.nav-links li {
+  margin: 0 10px;
+}
+
+.nav-links a {
+  position: relative;
+  color: white;
+  text-decoration: none;
+  font-size: 20px;
+  left: px;
+  flex: 1;
+  justify-content: flex-start;
+  font-weight: 500;
+  text-transform: uppercase;
+  padding: 0px;
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+
+.nav-links a:hover {
+  color: #f9c513;
+  transform: scale(1.1);
+}
+
+.nav-links a::after {
+  content: "";
+  position: absolute;
+  width: 0%;
+  height: 2px;
+  background-color: white;
+  bottom: -5px;
+  left: 0;
+  transition: width 0.3s ease;
+}
+
+.nav-links a:hover::after {
+  width: 100%;
+}
+
+.sign-in-container {
+  text-align: center;
+}
+
+.google-btn {
+  background-color: #ffffff;
+  position: relative;
+  left: -8px;
+  color: rgb(0, 0, 0);
+  font-size: 18px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  width: 110px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease-in-out;
+}
+
+.google-btn:hover {
+  background-color: #f52828;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.google-btn img {
+  width: 55px;
+}
+
+.google-btn span {
+  font-weight: bold;
+}
+
+/* Hamburger Menu */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  cursor: pointer;
+  margin-left: auto;
+  z-index: 1100;
+}
+
+.hamburger span {
+  height: 3px;
+  width: 25px;
+  background: white;
+  margin: 4px 0;
+  border-radius: 3px;
+  transition: 0.3s;
+}
+
+.hamburger.active span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.hamburger.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(7px, -6px);
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    height: auto;
+    padding: 15px;
+  }
+
+  .navbar-container {
+    position: relative;
+    right:2px ;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  
+
+  .logo {
+    width: 50px;
+    height: 50px;
+  }
+
+  .logo-title {
+    position: fixed;
+    left: 60px;
+    top: 20px;
+    margin-left: 10px;
+    margin-top: px;
+    font-size: 18px;
+  }
+
+  .hamburger {
+    display: flex;
+    position: fixed;
+    left:150px;
+    top: 47px;
+  }
+
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    background: linear-gradient(90deg, #0f2027, #319fad, #4074e6);
+    position: absolute;
+    top: 100px;
+    left: 0;
+    padding: 20px 0;
+    z-index: 1000;
+  }
+
+  .nav-links.show {
+    display: flex;
+  }
+
+  .nav-links li {
+    margin: 10px 0;
+    text-align: center;
+  }
+
+  .sign-in-container {
+    margin-top: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .google-btn {
+    border-radius: 50%;
+    width: 45px;
+    height: 52px;
+    padding: 0;
+    position: relative;
+    left: 95px;
+    top: -5px;
+    justify-content: center;
+  }
+
+  .google-btn img {
+    width: 40px;
+    height: 25px;
+  }
+
+  .google-btn span {
+    display: none;
+  }
+  
+}
+
+@media (max-width: 576px) {
+  .logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .logo-title {
+    font-size: 20px;
+  }
+}
+
+
+/* Add to existing Navbar.css */
+
+.user-profile-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+}
+
+.nav-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.nav-user-name {
+  font-weight: 500;
+  font-size: 16px;
+  color: white;
+}
+
+.logout-btn-nav {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid white;
+  padding: 5px 15px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.logout-btn-nav:hover {
+  background: white;
+  color: #4074e6;
+}
+
+/* Responsive styles for user profile in navbar */
+@media (max-width: 768px) {
+  .user-profile-nav {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .nav-user-name {
+    display: none;
+  }
+  
+  .logout-btn-nav {
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+
+/* Add to Navbar.css */
+.nav-user-avatar {
+  background: rgba(255,255,255,0.15);
+  object-fit: cover;
+  color: transparent; /* hides "Profile" */
+}

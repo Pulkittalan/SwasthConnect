@@ -1,0 +1,47 @@
+.slider {
+  position: relative;
+  width: 100%;
+  height: 400px; /* Base height for Desktop */
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  /* Ensures no extra space between navbar and slider */
+  display: block; 
+}
+
+.slide-container {
+  display: flex;
+  transition: transform 0.5s ease-in-out;
+  width: 100%;
+  height: 100%; /* Force container to take full slider height */
+}
+
+.slide {
+  min-width: 100%;
+  height: 100%; /* Ensure the slide div fills the container */
+  flex-shrink: 0;
+}
+
+.slide img {
+  width: 100%;
+  height: 100%;
+  /* This is the magic line: it scales the image to fill the space 
+     without stretching, like a background-image would */
+  object-fit: cover; 
+  /* Centers the most important part of the image */
+  object-position: center; 
+  display: block;
+}
+
+/* --- Responsive Heights --- */
+@media (max-width: 768px) {
+  .slider {
+    height: 300px; /* Taller on mobile to avoid tiny images */
+  }
+}
+
+@media (max-width: 480px) {
+  .slider {
+    height: 250px; /* Adjust based on your image content */
+  }
+}

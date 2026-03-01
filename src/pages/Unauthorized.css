@@ -1,0 +1,94 @@
+/* src/pages/Unauthorized.css */
+.unauthorized-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.unauthorized-content {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.unauthorized-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
+
+.unauthorized-content h1 {
+  color: #c62828;
+  margin-bottom: 15px;
+  font-size: 32px;
+}
+
+.unauthorized-content p {
+  color: #666;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.unauthorized-details {
+  font-size: 14px;
+  color: #888;
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border-left: 4px solid #c62828;
+}
+
+.unauthorized-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.btn-home, .btn-login, .btn-admin {
+  padding: 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-home {
+  background: #3949ab;
+  color: white;
+  border: 2px solid #3949ab;
+}
+
+.btn-login {
+  background: white;
+  color: #3949ab;
+  border: 2px solid #3949ab;
+}
+
+.btn-admin {
+  background: linear-gradient(135deg, #9c27b0, #673ab7);
+  color: white;
+  border: 2px solid #673ab7;
+}
+
+.btn-home:hover, .btn-login:hover, .btn-admin:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .unauthorized-content {
+    padding: 30px 20px;
+  }
+  
+  .unauthorized-actions {
+    flex-direction: column;
+  }
+}

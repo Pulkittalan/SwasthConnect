@@ -1,0 +1,367 @@
+/* ===============================
+   LOGIN PAGE WRAPPER
+================================ */
+.login-page {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+    overflow: hidden;
+}
+
+/* ===============================
+   GLOBAL RESET & BASE
+================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', 'Arial', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    
+}
+
+/* ===============================
+   BACKGROUND VIDEO
+================================ */
+.background-video {
+    position: fixed;
+    inset: 0;  /* replaces top, left, width, height */
+    z-index: -1;
+    overflow: hidden;
+}
+.video-background {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(45%);
+}
+
+/* ===============================
+   PAGE LAYOUT
+================================ */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* ===============================
+   MAIN CONTAINER
+================================ */
+.login-container {
+    display: flex;
+    width: min(1000px, 95vw);
+    min-height: min(600px, 92vh);
+
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+
+    border-radius: 22px;
+    overflow: hidden;
+
+    box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* ===============================
+   LEFT PANEL
+================================ */
+.image-container {
+    flex: 1;
+    padding: clamp(20px, 4vw, 40px);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    text-align: center;
+}
+
+.image-container img {
+    max-width: clamp(120px, 20vw, 200px);
+    margin-bottom: 30px;
+}
+
+.image-container h2 {
+    color: #ffffff;
+    font-size: clamp(20px, 3vw, 28px);
+    margin-bottom: 30px;
+    font-weight: 700;
+}
+
+/* ===============================
+   LOGIN OPTIONS
+================================ */
+.login-options {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.login-option-btn {
+    width: 100%;
+    padding: clamp(14px, 2.5vw, 16px) clamp(20px, 4vw, 30px);
+    font-size: clamp(15px, 2.2vw, 18px);
+    font-weight: 600;
+
+    background: linear-gradient(135deg, #3cbc40, #2ecc71);
+    color: #1f1f1f;
+
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 14px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+@media (hover: hover) {
+    .login-option-btn:hover {
+        background: #ffffff;
+        transform: translateY(-3px);
+        box-shadow:
+            0 14px 30px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+}
+
+.login-option-btn:active {
+    transform: translateY(0);
+    box-shadow:
+        0 6px 14px rgba(0, 0, 0, 0.25),
+        inset 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* ===============================
+   RIGHT PANEL
+================================ */
+.login-box {
+    flex: 1.5;
+    padding: clamp(20px, 4vw, 40px);
+    display: flex;
+    flex-direction: column;
+}
+
+.login-box h1 {
+    text-align: center;
+    font-size: clamp(22px, 3vw, 32px);
+    margin-bottom: 25px;
+    font-weight: 700;
+    color: #333;
+}
+
+/* ===============================
+   FORMS
+================================ */
+.login-form,
+.registration-form {
+    display: none;
+    flex: 1;
+}
+
+.login-form.active,
+.registration-form.active {
+    display: block;
+}
+
+.login-form input,
+.registration-form input,
+.registration-form select {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 12px;
+
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+
+    font-size: 15px;
+    transition: 0.25s ease;
+}
+
+.login-form input:focus,
+.registration-form input:focus,
+.registration-form select:focus {
+    border-color: #4CAF50;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+}
+
+/* ===============================
+   BUTTONS
+================================ */
+.login-btn,
+.register-btn {
+    width: 100%;
+    padding: 16px;
+    margin-top: 15px;
+
+    background: linear-gradient(135deg, #4CAF50, #2ecc71);
+    color: #ffffff;
+
+    border: none;
+    border-radius: 12px;
+
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+@media (hover: hover) {
+    .login-btn:hover,
+    .register-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(76, 175, 80, 0.4);
+    }
+}
+
+/* ===============================
+   LINKS
+================================ */
+.registration-link,
+.back-link {
+    text-align: center;
+    color: #4CAF50;
+    margin-top: 15px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* ===============================
+   REGISTRATION FORM
+================================ */
+.registration-form {
+    max-height: 520px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.registration-form::-webkit-scrollbar {
+    width: 6px;
+}
+
+.registration-form::-webkit-scrollbar-thumb {
+    background: #4CAF50;
+    border-radius: 10px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+}
+
+.form-full {
+    grid-column: 1 / -1;
+}
+
+/* ===============================
+   CHECKBOX GRIDS
+================================ */
+.days-checkbox,
+.facilities-checkbox {
+    display: grid;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.days-checkbox {
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.facilities-checkbox {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* ===============================
+   PASSWORD
+================================ */
+.password-container {
+    position: relative;
+}
+
+.eye-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+}
+
+/* ===============================
+   ERROR
+================================ */
+.error-message {
+    background: #ffebee;
+    color: #c62828;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* ===============================
+   RESPONSIVE
+================================ */
+@media (max-width: 900px) {
+    .login-container {
+        flex-direction: column;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .days-checkbox {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .facilities-checkbox {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .login-container {
+        border-radius: 0;
+        min-height: 100vh;
+    }
+
+    .days-checkbox {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .facilities-checkbox {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+

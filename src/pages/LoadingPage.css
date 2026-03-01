@@ -1,0 +1,93 @@
+.loading-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(to top, #a8e063, #56ab2f);
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+.loading-container {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 300px;
+}
+
+.bridge {
+  position: absolute;
+  bottom: 100px;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: #6c757d;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.person {
+  position: absolute;
+  bottom: 40px;
+  left: -50px;
+  width: 150px;
+  height: 150px;
+  background: url('../../public/images/heart.png');
+  background-size: cover;
+  animation: walk 2s linear infinite;
+}
+
+@keyframes walk {
+  0% { left: -50px; }
+  100% { left: calc(100% - 50px); }
+}
+
+.loading-text {
+  position: absolute;
+  top: 20px;
+  width: 100%;
+  text-align: center;
+  font-size: 24px;
+  color: #fff;
+}
+
+.heart {
+  position: absolute;
+  bottom: 40px;
+  right: 10px;
+  width: 150px;
+  height: 150px;
+  background: url('../../public/images/heart.png');
+  background-size: cover;
+  animation: beat 0.8s infinite;
+}
+
+@keyframes beat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+/* Add a class to stop the animation */
+.stop-animation {
+  animation: none !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .loading-container {
+    height: 200px;
+  }
+  
+  .person, .heart {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .loading-text {
+    font-size: 18px;
+  }
+}
