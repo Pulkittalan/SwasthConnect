@@ -327,7 +327,7 @@ const Login = () => {
       localStorage.setItem('doctorName', doctorData.name);
       
       alert('✅ Doctor login successful!');
-       navigate(`/dashboard/${formData.hospitalId}`);
+      window.location.href = '/doctor-dashboard';
       
     } catch (error) {
       console.error('Login error:', error);
@@ -369,7 +369,7 @@ const Login = () => {
       localStorage.setItem('hospitalName', hospitalData.name);
       
       alert('✅ Hospital login successful!');
-      window.location.href = `/dashboard/${formData.hospitalId}`;
+      navigate(`/dashboard/${formData.hospitalId}`);
       
     } catch (error) {
       console.error('Login error:', error);
