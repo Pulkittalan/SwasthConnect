@@ -1,10 +1,9 @@
-// src/components/ProtectedRoute.jsx
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, isAdmin, loading } = useAuth();
   const location = useLocation();
   
   if (loading) {
@@ -14,6 +13,7 @@ const ProtectedRoute = ({ children }) => {
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
+        flexDirection: 'column',
         background: '#f5f7fa'
       }}>
         <div className="spinner" style={{
@@ -24,13 +24,18 @@ const ProtectedRoute = ({ children }) => {
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
         }}></div>
+        <p style={{ marginTop: '20px', color: '#666' }}>Loading...</p>
       </div>
     );
   }
   
   if (!currentUser) {
-    // Redirect to login page with return URL
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  // If user is admin, redirect to admin dashboard
+  if (isAdmin) {
+    return <Navigate to="/admin-dashboard" replace />;
   }
   
   return children;

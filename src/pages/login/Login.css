@@ -34,6 +34,7 @@ body {
 ================================ */
 .background-video {
     position: fixed;
+    width: 100%;
     inset: 0;  /* replaces top, left, width, height */
     z-index: -1;
     overflow: hidden;

@@ -1,8 +1,9 @@
 // src/pages/admin/AdminLogin.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../../firebase/firebase';
+import { auth, db } from '../../firebase/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import './AdminLogin.css';
 
 const AdminLogin = () => {
@@ -18,11 +19,38 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      // Simple admin login for now - you can add admin validation later
-      await signInWithEmailAndPassword(auth, email, password);
+      // Sign in with Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
       
-      // Store admin flag in localStorage (temporary solution)
+      // Check if admin document already exists in Firestore
+      const adminDocRef = doc(db, 'admins', user.uid);
+      const adminDoc = await getDoc(adminDocRef);
+      
+      if (!adminDoc.exists()) {
+        // Auto-create admin document in Firestore
+        await setDoc(adminDocRef, {
+          email: user.email,
+          name: user.email.split('@')[0], // Extract name from email
+          role: 'admin',
+          uid: user.uid,
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp(),
+          createdBy: 'auto-login',
+          status: 'active'
+        });
+        console.log('✅ Admin document auto-created in Firestore');
+      } else {
+        // Update last login for existing admin
+        await setDoc(adminDocRef, {
+          lastLogin: serverTimestamp()
+        }, { merge: true });
+      }
+      
+      // Store admin session
       localStorage.setItem('isAdmin', 'true');
+      localStorage.setItem('adminEmail', email);
+      localStorage.setItem('adminUid', user.uid);
       
       // Redirect to admin dashboard
       navigate('/admin-dashboard');
@@ -32,15 +60,18 @@ const AdminLogin = () => {
       
       let errorMessage = 'Login failed. Please check credentials.';
       if (error.code === 'auth/user-not-found') {
-        errorMessage = 'Admin account not found.';
+        errorMessage = 'Admin account not found. Please create an account first.';
       } else if (error.code === 'auth/wrong-password') {
         errorMessage = 'Incorrect password.';
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'Invalid email format.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Try again later.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Check your internet connection.';
       }
       
       setError(errorMessage);
-      alert('❌ ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -68,7 +99,7 @@ const AdminLogin = () => {
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@example.com"
+              placeholder="admin@swasthconnect.com"
               required
               disabled={loading}
             />
@@ -97,7 +128,7 @@ const AdminLogin = () => {
 
           <div className="admin-login-footer">
             <p>
-              ⚠️ <strong>Warning:</strong> This area is restricted to authorized personnel only.
+              ⚠️ <strong>Note:</strong> Admin document will be auto-created in Firestore upon first login.
             </p>
             <button 
               type="button" 

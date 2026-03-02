@@ -160,6 +160,36 @@
   background: #283593;
 }
 
+/* Filter Buttons */
+.filter-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border: 2px solid #3949ab;
+  background: white;
+  color: #3949ab;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-btn.active {
+  background: #3949ab;
+  color: white;
+}
+
+.filter-btn:hover {
+  background: #3949ab;
+  color: white;
+}
+
 /* Tab Content */
 .tab-content {
   animation: fadeIn 0.3s ease;
@@ -312,18 +342,20 @@
   background: #138496;
 }
 
-/* Tables */
+/* Tables - IMPROVED FOR RESPONSIVENESS */
 .table-container {
   background: white;
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto; /* This makes the table horizontally scrollable */
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   margin-top: 20px;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .admin-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 800px; /* Ensures table doesn't shrink too much on mobile */
 }
 
 .admin-table thead {
@@ -336,6 +368,7 @@
   text-align: left;
   font-weight: 600;
   font-size: 14px;
+  white-space: nowrap; /* Prevents header text from wrapping */
 }
 
 .admin-table td {
@@ -343,6 +376,7 @@
   border-bottom: 1px solid #eee;
   font-size: 14px;
   color: #555;
+  white-space: nowrap; /* Prevents cell content from wrapping */
 }
 
 .admin-table tbody tr:hover {
@@ -354,6 +388,8 @@
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .status-badge.approved {
@@ -374,12 +410,14 @@
 .actions-cell {
   display: flex;
   gap: 8px;
+  min-width: 180px; /* Ensures action buttons have enough space */
 }
 
 .actions-cell button {
   padding: 6px 12px;
   font-size: 12px;
   white-space: nowrap;
+  flex: 1;
 }
 
 /* Settings */
@@ -489,7 +527,17 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
-/* Responsive */
+/* Responsive - IMPROVED */
+@media (max-width: 1200px) {
+  .admin-main {
+    padding: 25px;
+  }
+  
+  .cards-container {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+
 @media (max-width: 992px) {
   .admin-dashboard {
     flex-direction: column;
@@ -497,19 +545,28 @@
   
   .admin-sidebar {
     width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 15px;
+    padding: 20px;
+  }
+  
+  .admin-stats {
+    margin-bottom: 15px;
   }
   
   .admin-nav {
     flex-direction: row;
     flex-wrap: wrap;
+    gap: 8px;
   }
   
   .nav-btn {
-    flex: 1;
-    min-width: 200px;
+    flex: 1 1 calc(50% - 8px);
+    min-width: 140px;
+    padding: 12px;
+    font-size: 14px;
+  }
+  
+  .logout-btn {
+    margin-top: 10px;
   }
   
   .cards-container {
@@ -524,17 +581,171 @@
   
   .search-container {
     flex-direction: column;
+    gap: 10px;
   }
   
-  .form-group {
+  .refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .tab-content h3 {
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .filter-buttons {
     flex-direction: column;
+    gap: 8px;
+  }
+  
+  .filter-btn {
+    width: 100%;
+    text-align: center;
+  }
+  
+  /* Table responsiveness */
+  .table-container {
+    border-radius: 8px;
+    margin: 15px -10px; /* Negative margin to allow full width scrolling */
+    width: calc(100% + 20px);
+  }
+  
+  .admin-table {
+    min-width: 700px; /* Slightly smaller for mobile */
+  }
+  
+  .admin-table th,
+  .admin-table td {
+    padding: 12px 10px;
+    font-size: 13px;
+  }
+  
+  .actions-cell {
+    min-width: 160px;
+    gap: 5px;
+  }
+  
+  .actions-cell button {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  
+  /* Card adjustments */
+  .card {
+    padding: 15px;
+  }
+  
+  .card-header h4 {
+    font-size: 16px;
+  }
+  
+  .card-body p {
+    font-size: 13px;
+  }
+  
+  .card-body strong {
+    min-width: 100px;
   }
   
   .card-actions {
     flex-direction: column;
+    gap: 8px;
+  }
+  
+  .btn-approve, .btn-reject, .btn-delete, .btn-view {
+    width: 100%;
+    padding: 10px;
+  }
+  
+  /* Settings */
+  .settings-section {
+    padding: 20px;
+  }
+  
+  .form-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .btn-add-admin {
+    width: 100%;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-main {
+    padding: 15px;
+  }
+  
+  .admin-sidebar {
+    padding: 15px;
+  }
+  
+  .admin-header h2 {
+    font-size: 20px;
+  }
+  
+  .nav-btn {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  
+  .stat-card p {
+    font-size: 13px;
+  }
+  
+  .search-input {
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+  
+  .tab-content h3 {
+    font-size: 18px;
+  }
+  
+  .section h4 {
+    font-size: 16px;
+  }
+  
+  /* Table adjustments for very small screens */
+  .table-container {
+    margin: 10px -15px;
+    width: calc(100% + 30px);
+    border-radius: 0;
+  }
+  
+  .admin-table {
+    min-width: 600px;
+  }
+  
+  .admin-table th,
+  .admin-table td {
+    padding: 10px 8px;
+    font-size: 12px;
   }
   
   .actions-cell {
-    flex-direction: column;
+    min-width: 140px;
+  }
+  
+  .actions-cell button {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  
+  .status-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  
+  .card-body strong {
+    min-width: 90px;
+    font-size: 12px;
   }
 }

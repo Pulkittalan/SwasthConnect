@@ -35,6 +35,11 @@ const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
+  // Handle logo click to go to home
+  const handleLogoClick = () => {
+    navigate('/');
+  };
+
   // Check if user is admin
   useEffect(() => {
     const checkAdmin = async () => {
@@ -315,7 +320,37 @@ const AdminDashboard = () => {
       {/* Sidebar */}
       <div className="admin-sidebar">
         <div className="admin-header">
-          <h2>🏥 Admin Panel</h2>
+          {/* Logo and Brand - Clickable */}
+          <div 
+            onClick={handleLogoClick}
+            style={{ 
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginBottom: '15px'
+            }}
+            title="Go to Home"
+          >
+            <img 
+              src="/images/logo.png" 
+              alt="SwasthConnect Logo"
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '12px',
+                marginBottom: '10px',
+                border: '2px solid white'
+              }}
+              onError={(e) => {
+                e.target.src = '/images/default-logo.png';
+              }}
+            />
+            <h2 style={{ margin: 0, fontSize: '24px', color: 'white' }}>
+              Swasth<span style={{ color: '#4CAF50' }}>Connect</span>
+            </h2>
+          </div>
+          
           <div className="admin-info">
             <p><strong>{user?.name}</strong></p>
             <p>{user?.email}</p>
@@ -655,10 +690,10 @@ const AdminDashboard = () => {
                   <strong>Total Users:</strong> {stats.totalDoctors + stats.totalHospitals}
                 </div>
                 <div className="info-item">
-                  <strong>Firebase Project:</strong> Your Project Name
+                  <strong>Firebase Project:</strong> SwasthConnect
                 </div>
                 <div className="info-item">
-                  <strong>Last Updated:</strong> Just now
+                  <strong>Last Updated:</strong> {new Date().toLocaleString()}
                 </div>
               </div>
             </div>

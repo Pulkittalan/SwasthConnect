@@ -12,7 +12,7 @@ img {
   position: sticky;
   top: 0;
   z-index: 1000;
-  height: 110px;
+  min-height: 110px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -21,48 +21,55 @@ img {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 200px;
 }
 
 .logo {
-  position: relative;
-  top: 0px;
-  right: 9px;
   width: 90px;
   height: 90px;
-  margin-right: 10px;
+  object-fit: contain;
 }
 
 .logo-title {
-  position: relative;
-  left: -0.9%;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: bold;
   color: white;
   text-transform: uppercase;
   letter-spacing: 1px;
+  white-space: nowrap;
 }
 
 .nav-links {
   display: flex;
   list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .nav-links li {
-  margin: 0 10px;
+  margin: 0 8px;
 }
 
 .nav-links a {
-  position: relative;
   color: white;
   text-decoration: none;
-  font-size: 20px;
-  left: px;
-  flex: 1;
-  justify-content: flex-start;
+  font-size: 18px;
   font-weight: 500;
   text-transform: uppercase;
-  padding: 0px;
+  padding: 4px 8px;
   transition: color 0.3s ease, transform 0.3s ease;
+  white-space: nowrap;
 }
 
 .nav-links a:hover {
@@ -74,10 +81,10 @@ img {
   content: "";
   position: absolute;
   width: 0%;
-  height: 2px;
-  background-color: white;
+  height: 10px;
+  background-color: rgb(255, 0, 0);
   bottom: -5px;
-  left: 0;
+  left: 0px;
   transition: width 0.3s ease;
 }
 
@@ -86,38 +93,115 @@ img {
 }
 
 .sign-in-container {
-  text-align: center;
+  min-width: 200px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .google-btn {
   background-color: #ffffff;
-  position: relative;
-  left: -8px;
   color: rgb(0, 0, 0);
   font-size: 18px;
-  padding: 12px 24px;
+  padding: 10px 20px; /* Slightly increased padding */
   border: none;
   border-radius: 100px;
   cursor: pointer;
-  width: 110px;
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 10px; /* Increased gap slightly */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease-in-out;
+  white-space: nowrap;
+  /* Remove the problematic positioning */
+  position: relative;
+  left: 300%;
+  bottom: auto;
+  /* Add margin auto to help with centering within its container */
+  margin: 0;
 }
 
 .google-btn:hover {
-  background-color: #f52828;
+  background-color: #ff6b6b;
+  color: rgb(75, 57, 57);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
 }
 
 .google-btn img {
-  width: 55px;
+  width: 40px;
+  height: 24px;
 }
 
 .google-btn span {
   font-weight: bold;
+}
+
+/* User Profile in Navbar */
+.user-profile-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 6px 15px;
+  border-radius: 50px;
+  backdrop-filter: blur(5px);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  max-width: 350px;
+}
+
+.user-profile-nav:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.nav-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid white;
+  object-fit: cover;
+  background: rgba(255,255,255,0.15);
+}
+
+.nav-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 150px;
+}
+
+.nav-user-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-user-role {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.logout-btn-nav {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid white;
+  padding: 6px 15px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.logout-btn-nav:hover {
+  background: white;
+  color: #4074e6;
 }
 
 /* Hamburger Menu */
@@ -125,15 +209,15 @@ img {
   display: none;
   flex-direction: column;
   cursor: pointer;
-  margin-left: auto;
   z-index: 1100;
+  padding: 10px;
 }
 
 .hamburger span {
   height: 3px;
   width: 25px;
   background: white;
-  margin: 4px 0;
+  margin: 3px 0;
   border-radius: 3px;
   transition: 0.3s;
 }
@@ -151,20 +235,60 @@ img {
 }
 
 /* Responsive Styles */
+@media (max-width: 1200px) {
+  .nav-links a {
+    font-size: 14px;
+    margin: 0 4px;
+  }
+  
+  .logo-title {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 992px) {
+  .navbar {
+    min-height: 90px;
+  }
+  
+  .logo {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .logo-title {
+    font-size: 22px;
+  }
+  
+  .nav-links a {
+    font-size: 13px;
+  }
+  
+  .user-profile-nav {
+    padding: 4px 12px;
+  }
+  
+  .nav-user-info {
+    max-width: 120px;
+  }
+}
+
+
 @media (max-width: 768px) {
   .navbar {
-    flex-direction: column;
-    height: auto;
-    padding: 15px;
+    padding: 10px 15px;
+    min-height: auto;
   }
 
   .navbar-container {
     position: relative;
-    right:2px ;
-    flex-direction: row;
-    justify-content: space-between;
+    flex-wrap: wrap;
   }
-  
+
+  .logo-section {
+    min-width: auto;
+    flex: 1;
+  }
 
   .logo {
     width: 50px;
@@ -172,19 +296,13 @@ img {
   }
 
   .logo-title {
-    position: fixed;
-    left: 60px;
-    top: 20px;
-    margin-left: 10px;
-    margin-top: px;
     font-size: 18px;
+    margin-left: 5px;
   }
 
   .hamburger {
     display: flex;
-    position: fixed;
-    left:150px;
-    top: 47px;
+    order: 3;
   }
 
   .nav-links {
@@ -193,10 +311,12 @@ img {
     width: 100%;
     background: linear-gradient(90deg, #0f2027, #319fad, #4074e6);
     position: absolute;
-    top: 100px;
+    top: 100%;
     left: 0;
-    padding: 20px 0;
+    padding: 20px;
+    margin: 0;
     z-index: 1000;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
   }
 
   .nav-links.show {
@@ -204,114 +324,212 @@ img {
   }
 
   .nav-links li {
-    margin: 10px 0;
+    margin: 8px 0;
+    width: 100%;
     text-align: center;
   }
 
+  .nav-links a {
+    font-size: 16px;
+    display: block;
+    padding: 8px;
+  }
+
   .sign-in-container {
-    margin-top: 10px;
-    width: 100%;
-    display: flex;
-    justify-content: center;
+    order: 2;
+    min-width: auto;
+    margin-right: 10px;
+  }
+
+  .user-profile-nav {
+    padding: 4px 10px;
+    max-width: none;
+  }
+
+  .nav-user-info {
+    max-width: 100px;
+  }
+
+  .nav-user-name {
+    font-size: 13px;
+  }
+
+  .nav-user-role {
+    font-size: 10px;
+  }
+
+  .logout-btn-nav {
+    padding: 4px 10px;
+    font-size: 12px;
   }
 
   .google-btn {
-    border-radius: 50%;
-    width: 45px;
-    height: 52px;
-    padding: 0;
-    position: relative;
-    left: 95px;
-    top: -5px;
-    justify-content: center;
+    padding: 8px 15px;
+    font-size: 14px;
+    position: static; /* Ensure it's not positioned */
+    left: auto;
+    bottom: auto;
+    gap: 6px;
   }
 
   .google-btn img {
-    width: 40px;
-    height: 25px;
+    width: 20px;
+    height: 20px;
   }
-
-  .google-btn span {
-    display: none;
-  }
-  
 }
 
 @media (max-width: 576px) {
+  .navbar {
+    padding: 8px 12px;
+  }
+
+  .logo-section {
+    min-width: auto;
+  }
+
   .logo {
-    width: 60px;
-    height: 60px;
+    width: 40px;
+    height: 40px;
   }
 
   .logo-title {
-    font-size: 20px;
+    font-size: 16px;
+  }
+
+  .user-profile-nav {
+    padding: 3px 8px;
+    gap: 6px;
+  }
+
+  .nav-user-avatar {
+    width: 30px;
+    height: 30px;
+    border-width: 1px;
+  }
+
+  .nav-user-info {
+    max-width: 70px;
+  }
+
+  .nav-user-name {
+    font-size: 11px;
+  }
+
+  .nav-user-role {
+    font-size: 8px;
+  }
+
+  .logout-btn-nav {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+
+  .google-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    gap: 5px;
+    position: static; /* Ensure it's not positioned */
+    left: auto;
+    bottom: auto;
+  }
+
+  .google-btn img {
+    width: 16px;
+    height: 16px;
+  }
+
+  .hamburger {
+    padding: 5px;
+  }
+
+  .hamburger span {
+    width: 20px;
+    height: 2px;
   }
 }
 
-
-/* Add to existing Navbar.css */
-
-.user-profile-nav {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: white;
-}
-
-.nav-user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid white;
-}
-
-.nav-user-name {
-  font-weight: 500;
-  font-size: 16px;
-  color: white;
-}
-
-.logout-btn-nav {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid white;
-  padding: 5px 15px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.logout-btn-nav:hover {
-  background: white;
-  color: #4074e6;
-}
-
-/* Responsive styles for user profile in navbar */
-@media (max-width: 768px) {
-  .user-profile-nav {
-    flex-direction: column;
+@media (max-width: 320px) {
+  .logo{
+    width: 80px;
+    height: 80px;
+  }
+  .logo-title {
+   font-size: 16px;
+  }
+  .google-btn img {
+    width: 30px;
+    height: 18px;
+  }
+  .google-btn {
+    padding: 6px 12px;
+    font-size: 12px;
     gap: 5px;
+    position: static; /* Ensure it's not positioned */
+    left: auto;
+    bottom: auto;
   }
   
-  .nav-user-name {
-    display: none;
+  .logo-section {
+    min-width: auto;
+  }
+  
+  
+  .nav-user-info {
+   
+   
+  }
+  
+  .user-profile-nav {
+    padding: 3px 6px;
   }
   
   .logout-btn-nav {
-    padding: 3px 10px;
-    font-size: 12px;
+    font-size: 9px;
+    padding: 3px 6px;
   }
 }
+/* For very small screens */
+@media (max-width: 380px) {
+  .logo{
+    width: 80px;
+    height: 80px;
+  }
+  .logo-title {
+    display: none;
+  }
+  .google-btn img {
+    width: 30px;
+    height: 18px;
+  }
+  .google-btn  {
+    width: px;
+    height: 30px;
+  }
+  
+  .logo-section {
+    min-width: auto;
+  }
+  
+  
+  .nav-user-info {
+   
+   
+  }
+  
+  .user-profile-nav {
+    padding: 3px 6px;
+  }
+  
+  .logout-btn-nav {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+}
+
+
+
+/* Animation */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-
-/* Add to Navbar.css */
-.nav-user-avatar {
-  background: rgba(255,255,255,0.15);
-  object-fit: cover;
-  color: transparent; /* hides "Profile" */
 }

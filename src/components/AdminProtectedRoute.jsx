@@ -1,4 +1,3 @@
-// src/components/AdminProtectedRoute.jsx
 import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,71 +5,34 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 
 const AdminProtectedRoute = ({ children }) => {
-  const { currentUser, loading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { currentUser, isAdmin, loading } = useAuth();
   const [checkingAdmin, setCheckingAdmin] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const verifyAdmin = async () => {
       if (!currentUser) {
         setCheckingAdmin(false);
         return;
       }
 
       try {
-        // Check multiple ways admin could be stored
-        let adminCheck = false;
-        
-        // 1. Check in admin_emails collection
-        try {
-          const adminEmailDoc = await getDoc(doc(db, 'admin_emails', currentUser.email));
-          if (adminEmailDoc.exists()) {
-            adminCheck = true;
-          }
-        } catch (error) {
-          console.log('admin_emails collection not found or error:', error);
+        // Double-check in Firestore for security
+        const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
+        if (!adminDoc.exists()) {
+          // If not in Firestore but isAdmin is true, something's wrong
+          setCheckingAdmin(false);
+          return;
         }
-        
-        // 2. Check in admins collection by UID
-        if (!adminCheck) {
-          try {
-            const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
-            if (adminDoc.exists()) {
-              adminCheck = true;
-            }
-          } catch (error) {
-            console.log('admins collection not found or error:', error);
-          }
-        }
-        
-        // 3. Check in system settings (fallback)
-        if (!adminCheck) {
-          try {
-            const settingsDoc = await getDoc(doc(db, 'system', 'admin_settings'));
-            if (settingsDoc.exists()) {
-              const adminEmails = settingsDoc.data()?.adminEmails || [];
-              if (adminEmails.includes(currentUser.email)) {
-                adminCheck = true;
-              }
-            }
-          } catch (error) {
-            console.log('system settings not found or error:', error);
-          }
-        }
-        
-        setIsAdmin(adminCheck);
-        
       } catch (error) {
-        console.error('Admin check error:', error);
-        setIsAdmin(false);
+        console.error('Admin verification error:', error);
       } finally {
         setCheckingAdmin(false);
       }
     };
 
     if (currentUser) {
-      checkAdminStatus();
+      verifyAdmin();
     } else {
       setCheckingAdmin(false);
     }
@@ -102,7 +64,6 @@ const AdminProtectedRoute = ({ children }) => {
   }
 
   if (!currentUser) {
-    // Redirect to admin login with return URL
     return <Navigate to="/admin-login" state={{ from: location.pathname }} replace />;
   }
 
