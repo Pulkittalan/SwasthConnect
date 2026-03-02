@@ -327,7 +327,7 @@ const Login = () => {
       localStorage.setItem('doctorName', doctorData.name);
       
       alert('✅ Doctor login successful!');
-      window.location.href = '/doctor-dashboard';
+       navigate(`/dashboard/${formData.hospitalId}`);
       
     } catch (error) {
       console.error('Login error:', error);
