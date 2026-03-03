@@ -5,7 +5,9 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'fire
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom'; // Added useNavigate
 import './Login.css';
+
 import videoBg from './2.mp4';
+
 
 const Login = () => {
   const [activeForm, setActiveForm] = useState(null);

@@ -4,7 +4,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useParams, useNavigate } from 'react-router-dom';
 import './HospitalDashboard.css';
 
+
+
+
 const HospitalDashboard = () => {
+ 
   const { hospitalId } = useParams();
   const navigate = useNavigate();
   const [hospitalData, setHospitalData] = useState(null);
@@ -45,27 +49,28 @@ const HospitalDashboard = () => {
   };
 
   const generateEncryptedBedUrl = () => {
-    if (!hospitalData) return '#';
-    
-    const currentHospitalId = hospitalId || hospitalData.id || hospitalData.hospitalId;
-    
-    if (!currentHospitalId) {
-      console.error('No hospital ID available');
-      return '#';
-    }
-    
-    const timestamp = Date.now();
-    const dataToEncrypt = JSON.stringify({
-      hospitalId: currentHospitalId,
-      hospitalName: hospitalData.name,
-      timestamp,
-      bedData: bedData
-    });
-    
-    const encrypted = btoa(encodeURIComponent(dataToEncrypt));
-    
-    return `/bed-management?token=${encrypted}&h=${currentHospitalId}&t=${timestamp}`;
-  };
+  if (!hospitalData) return '#';
+  
+  const currentHospitalId = hospitalId || hospitalData.id || hospitalData.hospitalId;
+  
+  if (!currentHospitalId) {
+    console.error('No hospital ID available');
+    return '#';
+  }
+  
+  const timestamp = Date.now();
+  const dataToEncrypt = JSON.stringify({
+    hospitalId: currentHospitalId,
+    hospitalName: hospitalData.name,
+    timestamp,
+    bedData: bedData
+  });
+  
+  const encrypted = btoa(encodeURIComponent(dataToEncrypt));
+  
+  // For HashRouter, we need to include the hash
+  return `#/bed-management?token=${encrypted}&h=${currentHospitalId}&t=${timestamp}`;
+};
 
   const calculateBedStats = () => {
     let total = 0;
@@ -215,13 +220,15 @@ const HospitalDashboard = () => {
               <span>Healthcare Bridge System</span>
             </div>
           </div>
-          
-          <h1 style={{ marginTop: '10px' }}>🏥 {hospitalData?.name || 'Hospital Dashboard'}</h1>
-          <p>📍 {hospitalData?.address || 'No address available'}</p>
-          <p>📞 {hospitalData?.contact || 'No contact available'}</p>
-          
+
+          <h1 style={{ marginTop: "10px" }}>
+            🏥 {hospitalData?.name || "Hospital Dashboard"}
+          </h1>
+          <p>📍 {hospitalData?.address || "No address available"}</p>
+          <p>📞 {hospitalData?.contact || "No contact available"}</p>
+
           <div className="hospital-badge">
-            <span style={{ fontSize: '1.2em' }}>🏥</span>
+            <span style={{ fontSize: "1.2em" }}>🏥</span>
             <span>Hospital ID: {hospitalId}</span>
           </div>
         </div>
@@ -250,35 +257,49 @@ const HospitalDashboard = () => {
             <h3>Utilization Rate</h3>
             <p>{total > 0 ? Math.round((occupied / total) * 100) : 0}%</p>
             <div className="utilization-progress">
-              <div 
+              <div
                 className={`utilization-fill ${getUtilizationColor(total, occupied)}`}
-                style={{ width: `${total > 0 ? (occupied / total) * 100 : 0}%` }}
+                style={{
+                  width: `${total > 0 ? (occupied / total) * 100 : 0}%`,
+                }}
               />
             </div>
-          </div>
+          </div>  
         </div>
 
         {/* Action Section */}
         <div className="action-section">
-          <button 
+          <button
             className="edit-beds-btn"
-            onClick={() => window.open(generateEncryptedBedUrl(), '_blank')}
+            onClick={() => {
+              const url = generateEncryptedBedUrl();
+              // For HashRouter, we need to handle the navigation differently
+              if (url.startsWith("#")) {
+                // If it's a hash URL, open it with the full URL including the hash
+                window.open(
+                  window.location.origin + window.location.pathname + url,
+                  "_blank",
+                );
+              } else {
+                window.open(url, "_blank");
+              }
+            }}
           >
-            <span style={{ fontSize: '1.2em' }}>✏️</span>
+            <span style={{ fontSize: "1.2em" }}>✏️</span>
             <span>Edit Beds Management</span>
           </button>
-          
+
           <div className="view-toggle">
-            <button 
-              className={`view-btn ${viewMode === 'table' ? 'active' : ''}`}
-              onClick={() => setViewMode('table')}
+            <button
+              className={`view-btn ${viewMode === "table" ? "active" : ""}`}
+              onClick={() => setViewMode("table")}
             >
               <span>📋</span>
               <span>Table View</span>
             </button>
-            <button 
-              className={`view-btn ${viewMode === 'cards' ? 'active' : ''}`}
-              onClick={() => setViewMode('cards')}
+            <button
+              className={`view-btn ${viewMode === "cards" ? "active" : ""}`}
+              onClick={() => setViewMode("cards")}
             >
               <span>🃏</span>
               <span>Cards View</span>
@@ -294,28 +315,40 @@ const HospitalDashboard = () => {
             <div className="info-grid">
               <div className="info-item">
                 <strong>Hospital ID</strong>
-                <span style={{ fontSize: '1.1em', fontWeight: '600', color: '#0d9488' }}>{hospitalId}</span>
+                <span
+                  style={{
+                    fontSize: "1.1em",
+                    fontWeight: "600",
+                    color: "#0d9488",
+                  }}
+                >
+                  {hospitalId}
+                </span>
               </div>
               <div className="info-item">
                 <strong>Email Address</strong>
-                <span>{hospitalData?.email || 'N/A'}</span>
+                <span>{hospitalData?.email || "N/A"}</span>
               </div>
               <div className="info-item">
                 <strong>Emergency Contact</strong>
-                <span style={{ color: '#ef4444', fontWeight: '600' }}>
-                  {hospitalData?.emergencyContact || hospitalData?.contact || 'N/A'}
+                <span style={{ color: "#ef4444", fontWeight: "600" }}>
+                  {hospitalData?.emergencyContact ||
+                    hospitalData?.contact ||
+                    "N/A"}
                 </span>
               </div>
               <div className="info-item">
                 <strong>Status</strong>
-                <span style={{
-                  color: '#10b981',
-                  fontWeight: '600',
-                  background: '#d1fae5',
-                  padding: '4px 12px',
-                  borderRadius: '12px',
-                  fontSize: '0.9em'
-                }}>
+                <span
+                  style={{
+                    color: "#10b981",
+                    fontWeight: "600",
+                    background: "#d1fae5",
+                    padding: "4px 12px",
+                    borderRadius: "12px",
+                    fontSize: "0.9em",
+                  }}
+                >
                   🟢 Operational
                 </span>
               </div>
@@ -335,7 +368,7 @@ const HospitalDashboard = () => {
             </div>
 
             {Object.keys(bedData).length > 0 ? (
-              viewMode === 'table' ? (
+              viewMode === "table" ? (
                 <div className="table-container">
                   <table className="bed-categories-table">
                     <thead>
@@ -349,62 +382,75 @@ const HospitalDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(bedData).map(([category, data], index) => {
-                        const totalBeds = data.totalBeds || 0;
-                        const availableBeds = data.availableBeds || 0;
-                        const occupiedBeds = totalBeds - availableBeds;
-                        const utilization = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
-                        const status = getStatusLabel(availableBeds);
-                        
-                        return (
-                          <tr key={category}>
-                            <td>
-                              <span className="bed-category-icon" style={{ '--delay': index }}>
-                                {getCategoryIcon(category)}
-                              </span>
-                              <span>{category}</span>
-                            </td>
-                            <td>
-                              <span className="status-badge status-total">
-                                {totalBeds}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="status-badge status-available">
-                                {availableBeds}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="status-badge status-occupied">
-                                {occupiedBeds}
-                              </span>
-                            </td>
-                            <td>
-                              <div style={{ fontWeight: '600', color: '#1e293b' }}>
-                                {Math.round(utilization)}%
-                              </div>
-                              <div className="utilization-progress">
-                                <div 
-                                  className={`utilization-fill ${getUtilizationColor(totalBeds, occupiedBeds)}`}
-                                  style={{ width: `${utilization}%` }}
-                                />
-                              </div>
-                            </td>
-                            <td>
-                              <span 
-                                className="status-badge"
-                                style={{
-                                  background: `${status.color}15`,
-                                  color: status.color,
-                                  border: `1px solid ${status.color}30`
-                                }}
-                              >
-                                {status.label}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {Object.entries(bedData).map(
+                        ([category, data], index) => {
+                          const totalBeds = data.totalBeds || 0;
+                          const availableBeds = data.availableBeds || 0;
+                          const occupiedBeds = totalBeds - availableBeds;
+                          const utilization =
+                            totalBeds > 0
+                              ? (occupiedBeds / totalBeds) * 100
+                              : 0;
+                          const status = getStatusLabel(availableBeds);
+
+                          return (
+                            <tr key={category}>
+                              <td>
+                                <span
+                                  className="bed-category-icon"
+                                  style={{ "--delay": index }}
+                                >
+                                  {getCategoryIcon(category)}
+                                </span>
+                                <span>{category}</span>
+                              </td>
+                              <td>
+                                <span className="status-badge status-total">
+                                  {totalBeds}
+                                </span>
+                              </td>
+                              <td>
+                                <span className="status-badge status-available">
+                                  {availableBeds}
+                                </span>
+                              </td>
+                              <td>
+                                <span className="status-badge status-occupied">
+                                  {occupiedBeds}
+                                </span>
+                              </td>
+                              <td>
+                                <div
+                                  style={{
+                                    fontWeight: "600",
+                                    color: "#1e293b",
+                                  }}
+                                >
+                                  {Math.round(utilization)}%
+                                </div>
+                                <div className="utilization-progress">
+                                  <div
+                                    className={`utilization-fill ${getUtilizationColor(totalBeds, occupiedBeds)}`}
+                                    style={{ width: `${utilization}%` }}
+                                  />
+                                </div>
+                              </td>
+                              <td>
+                                <span
+                                  className="status-badge"
+                                  style={{
+                                    background: `${status.color}15`,
+                                    color: status.color,
+                                    border: `1px solid ${status.color}30`,
+                                  }}
+                                >
+                                  {status.label}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        },
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -414,55 +460,93 @@ const HospitalDashboard = () => {
                     const totalBeds = data.totalBeds || 0;
                     const availableBeds = data.availableBeds || 0;
                     const occupiedBeds = totalBeds - availableBeds;
-                    const utilization = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+                    const utilization =
+                      totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
                     const status = getStatusLabel(availableBeds);
-                    
+
                     return (
-                      <div key={category} className="bed-category-card" style={{ animationDelay: `${index * 0.1}s` }}>
+                      <div
+                        key={category}
+                        className="bed-category-card"
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                      >
                         <div className="bed-category-header">
                           <h4>
-                            <span className="bed-category-icon" style={{ '--delay': index }}>
+                            <span
+                              className="bed-category-icon"
+                              style={{ "--delay": index }}
+                            >
                               {getCategoryIcon(category)}
                             </span>
                             {category}
                           </h4>
-                          <span style={{
-                            fontSize: '0.85em',
-                            padding: '6px 15px',
-                            borderRadius: '15px',
-                            background: `${status.color}15`,
-                            color: status.color,
-                            fontWeight: '600',
-                            border: `1px solid ${status.color}30`
-                          }}>
+                          <span
+                            style={{
+                              fontSize: "0.85em",
+                              padding: "6px 15px",
+                              borderRadius: "15px",
+                              background: `${status.color}15`,
+                              color: status.color,
+                              fontWeight: "600",
+                              border: `1px solid ${status.color}30`,
+                            }}
+                          >
                             {status.label} Availability
                           </span>
                         </div>
-                        
+
                         <div className="bed-stats-grid">
                           <div className="stat-item">
                             <div className="label">Total</div>
-                            <div className="value" style={{ color: '#1e40af' }}>{totalBeds}</div>
+                            <div className="value" style={{ color: "#1e40af" }}>
+                              {totalBeds}
+                            </div>
                           </div>
                           <div className="stat-item">
                             <div className="label">Available</div>
-                            <div className="value" style={{ color: '#10b981' }}>{availableBeds}</div>
+                            <div className="value" style={{ color: "#10b981" }}>
+                              {availableBeds}
+                            </div>
                           </div>
                           <div className="stat-item">
                             <div className="label">Occupied</div>
-                            <div className="value" style={{ color: '#ef4444' }}>{occupiedBeds}</div>
+                            <div className="value" style={{ color: "#ef4444" }}>
+                              {occupiedBeds}
+                            </div>
                           </div>
                         </div>
-                        
-                        <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.9em', color: '#64748b', fontWeight: '500' }}>Utilization:</span>
-                            <span style={{ fontWeight: '700', color: '#1e293b' }}>
+
+                        <div
+                          style={{
+                            marginTop: "20px",
+                            paddingTop: "15px",
+                            borderTop: "1px solid #e2e8f0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "0.9em",
+                                color: "#64748b",
+                                fontWeight: "500",
+                              }}
+                            >
+                              Utilization:
+                            </span>
+                            <span
+                              style={{ fontWeight: "700", color: "#1e293b" }}
+                            >
                               {Math.round(utilization)}%
                             </span>
                           </div>
                           <div className="utilization-progress">
-                            <div 
+                            <div
                               className={`utilization-fill ${getUtilizationColor(totalBeds, occupiedBeds)}`}
                               style={{ width: `${utilization}%` }}
                             />
@@ -477,11 +561,16 @@ const HospitalDashboard = () => {
               <div className="empty-state">
                 <div className="empty-state-icon">🛏️</div>
                 <h3>No Bed Data Available</h3>
-                <p>Start by adding bed categories and their availability to manage hospital resources effectively.</p>
-                <button 
+                <p>
+                  Start by adding bed categories and their availability to
+                  manage hospital resources effectively.
+                </p>
+                <button
                   className="edit-beds-btn"
-                  onClick={() => window.open(generateEncryptedBedUrl(), '_blank')}
-                  style={{ padding: '15px 40px', fontSize: '16px' }}
+                  onClick={() =>
+                    window.open(generateEncryptedBedUrl(), "_blank")
+                  }
+                  style={{ padding: "15px 40px", fontSize: "16px" }}
                 >
                   <span>➕</span>
                   <span>Add Bed Categories</span>

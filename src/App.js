@@ -13,6 +13,8 @@ import AdminProtectedRoute from './components/AdminProtectedRoute';
 import AdminLogin from './pages/admin/AdminLogin';
 import DoctorDashboard from './pages/doctor_dashboard/DoctorDashboard';
 import Unauthorized from './pages/Unauthorized';
+import HospitalProtectedRoute from './components/HospitalProtectedRoute';
+
 
 
 import './App.css';
@@ -40,25 +42,31 @@ function App() {
               </ProtectedRoute>
             }
           />
-          
+
           <Route path="/telemedicine" element={<Telemedicine />} />
           <Route path="/loading" element={<LoadingPage />} />
           <Route path="/login" element={<Login />} />
-
 
           {/* ADD THIS UNAUTHORIZED ROUTE */}
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           <Route path="/admin-login" element={<AdminLogin />} />
           {/* Admin Routes (Double Protected) */}
-        <Route path="/admin-dashboard" element={
-          <AdminProtectedRoute>
-            <AdminDashboard />
-          </AdminProtectedRoute>
-        } />
+          <Route
+            path="/admin-dashboard"
+            element={
+              <AdminProtectedRoute>
+                <AdminDashboard />
+              </AdminProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard/:hospitalId"
-            element={<HospitalDashboard />}
+            element={
+              <HospitalProtectedRoute>
+                <HospitalDashboard />
+              </HospitalProtectedRoute>
+            }
           />
           <Route path="/bed-management" element={<BedManagement />} />
 

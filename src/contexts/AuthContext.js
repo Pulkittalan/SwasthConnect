@@ -4,7 +4,8 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
-  GoogleAuthProvider 
+  GoogleAuthProvider,
+  signInWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 
@@ -17,30 +18,23 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [hospitalData, setHospitalData] = useState(null);
+  const [doctorData, setDoctorData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userType, setUserType] = useState(null);
   const [loading, setLoading] = useState(true);
   const signInInProgress = useRef(false);
 
-  // Check if user is admin
   const checkIfAdmin = async (user) => {
     try {
-      // Check in admins collection by UID
       const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-      if (adminDoc.exists()) {
-        return true;
-      }
+      if (adminDoc.exists()) return true;
 
-      // Check by email in admins collection
       const adminByEmail = await getDoc(doc(db, 'admins', user.email));
-      if (adminByEmail.exists()) {
-        return true;
-      }
+      if (adminByEmail.exists()) return true;
 
-      // Check in admin_emails collection
       const adminEmailDoc = await getDoc(doc(db, 'admin_emails', user.email));
-      if (adminEmailDoc.exists()) {
-        return true;
-      }
+      if (adminEmailDoc.exists()) return true;
 
       return false;
     } catch (error) {
@@ -49,13 +43,122 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const hospitalLogin = async (hospitalId, password) => {
+    try {
+      const hospitalRef = doc(db, 'hospitals', hospitalId);
+      const hospitalSnap = await getDoc(hospitalRef);
+      
+      if (!hospitalSnap.exists()) {
+        throw new Error('Hospital not found');
+      }
+
+      const hospitalDataFromDb = hospitalSnap.data();
+      
+      if (hospitalDataFromDb.status !== 'approved') {
+        throw new Error('Hospital account pending verification');
+      }
+
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        hospitalDataFromDb.email,
+        password
+      );
+
+      setCurrentUser(userCredential.user);
+      setHospitalData(hospitalDataFromDb);
+      setUserType('hospital');
+      
+      localStorage.setItem('userType', 'hospital');
+      localStorage.setItem('hospitalId', hospitalId);
+      localStorage.setItem('hospitalName', hospitalDataFromDb.name);
+      
+      await updateDoc(hospitalRef, {
+        lastLogin: new Date().toISOString()
+      });
+
+      return { success: true, hospitalData: hospitalDataFromDb };
+    } catch (error) {
+      console.error('Hospital login error:', error);
+      throw error;
+    }
+  };
+
+  const doctorLogin = async (doctorId, password) => {
+    try {
+      const doctorRef = doc(db, 'doctors', doctorId);
+      const doctorSnap = await getDoc(doctorRef);
+      
+      if (!doctorSnap.exists()) {
+        throw new Error('Doctor not found');
+      }
+
+      const doctorDataFromDb = doctorSnap.data();
+      
+      if (doctorDataFromDb.status !== 'approved') {
+        throw new Error('Doctor account pending verification');
+      }
+
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        doctorDataFromDb.email,
+        password
+      );
+
+      setCurrentUser(userCredential.user);
+      setDoctorData(doctorDataFromDb);
+      setUserType('doctor');
+      
+      localStorage.setItem('userType', 'doctor');
+      localStorage.setItem('doctorId', doctorId);
+      localStorage.setItem('doctorName', doctorDataFromDb.name);
+      
+      await updateDoc(doctorRef, {
+        lastLogin: new Date().toISOString()
+      });
+
+      return { success: true, doctorData: doctorDataFromDb };
+    } catch (error) {
+      console.error('Doctor login error:', error);
+      throw error;
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    if (signInInProgress.current) {
+      console.log("Sign-in already in progress");
+      return;
+    }
+
+    try {
+      signInInProgress.current = true;
+      
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const result = await signInWithPopup(auth, provider);
+      await saveUserToFirestore(result.user);
+      
+      setUserType('user');
+      localStorage.setItem('userType', 'user');
+      
+      return result.user;
+    } catch (error) {
+      console.error("Google sign-in error:", error);
+      throw error;
+    } finally {
+      setTimeout(() => {
+        signInInProgress.current = false;
+      }, 2000);
+    }
+  };
+
   const saveUserToFirestore = async (user) => {
     try {
-      // First check if user is admin
       const adminStatus = await checkIfAdmin(user);
       
       if (adminStatus) {
-        // This is an admin - save to admins collection
         const adminRef = doc(db, 'admins', user.uid);
         const adminDoc = await getDoc(adminRef);
         
@@ -78,11 +181,10 @@ export function AuthProvider({ children }) {
         }
         
         setIsAdmin(true);
-        setUserData(null);
+        setUserType('admin');
         return;
       }
 
-      // Regular user flow
       const userRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userRef);
       
@@ -116,55 +218,34 @@ export function AuthProvider({ children }) {
       
       const updatedDoc = await getDoc(userRef);
       setUserData(updatedDoc.data());
-      setIsAdmin(false);
+      setUserType('user');
       
     } catch (error) {
       console.error("Error saving user to Firestore:", error);
     }
   };
 
-  const signInWithGoogle = async () => {
-    if (signInInProgress.current) {
-      console.log("Sign-in already in progress");
-      return;
-    }
-
-    try {
-      signInInProgress.current = true;
-      
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-      
-      provider.addScope('profile');
-      provider.addScope('email');
-      
-      const result = await signInWithPopup(auth, provider);
-      await saveUserToFirestore(result.user);
-      return result.user;
-    } catch (error) {
-      console.error("Google sign-in error:", error);
-      throw error;
-    } finally {
-      setTimeout(() => {
-        signInInProgress.current = false;
-      }, 2000);
-    }
-  };
-
   const logout = async () => {
     try {
       await signOut(auth);
+      
       setCurrentUser(null);
       setUserData(null);
+      setHospitalData(null);
+      setDoctorData(null);
       setIsAdmin(false);
+      setUserType(null);
       
-      // Clear all storage
+      localStorage.removeItem('userType');
+      localStorage.removeItem('hospitalId');
+      localStorage.removeItem('hospitalName');
+      localStorage.removeItem('doctorId');
+      localStorage.removeItem('doctorName');
       localStorage.removeItem('isAdmin');
       localStorage.removeItem('adminEmail');
       localStorage.removeItem('adminUid');
       sessionStorage.clear();
+      
     } catch (error) {
       console.error("Logout error:", error);
       throw error;
@@ -172,51 +253,71 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
+    const checkExistingSession = async (user) => {
+      if (user) {
+        try {
+          const adminStatus = await checkIfAdmin(user);
+          if (adminStatus) {
+            setIsAdmin(true);
+            setUserType('admin');
+            setLoading(false);
+            return;
+          }
+
+          const storedHospitalId = localStorage.getItem('hospitalId');
+          if (storedHospitalId) {
+            const hospitalRef = doc(db, 'hospitals', storedHospitalId);
+            const hospitalSnap = await getDoc(hospitalRef);
+            
+            if (hospitalSnap.exists() && hospitalSnap.data().email === user.email) {
+              setHospitalData(hospitalSnap.data());
+              setUserType('hospital');
+              setLoading(false);
+              return;
+            }
+          }
+
+          const storedDoctorId = localStorage.getItem('doctorId');
+          if (storedDoctorId) {
+            const doctorRef = doc(db, 'doctors', storedDoctorId);
+            const doctorSnap = await getDoc(doctorRef);
+            
+            if (doctorSnap.exists() && doctorSnap.data().email === user.email) {
+              setDoctorData(doctorSnap.data());
+              setUserType('doctor');
+              setLoading(false);
+              return;
+            }
+          }
+
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            setUserData(userSnap.data());
+            setUserType('user');
+          }
+          
+        } catch (error) {
+          console.error("Error checking session:", error);
+        }
+      }
+      setLoading(false);
+    };
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       
       if (user) {
-        try {
-          const adminStatus = await checkIfAdmin(user);
-          
-          if (adminStatus) {
-            const adminRef = doc(db, 'admins', user.uid);
-            const adminDoc = await getDoc(adminRef);
-            
-            if (adminDoc.exists()) {
-              setIsAdmin(true);
-              setUserData(null);
-              
-              await updateDoc(adminRef, {
-                lastLogin: new Date().toISOString()
-              });
-            } else {
-              await saveUserToFirestore(user);
-            }
-          } else {
-            const userRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userRef);
-            
-            if (userDoc.exists()) {
-              setUserData(userDoc.data());
-              setIsAdmin(false);
-              
-              await updateDoc(userRef, {
-                lastLogin: new Date().toISOString()
-              });
-            } else {
-              await saveUserToFirestore(user);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-        }
+        await checkExistingSession(user);
       } else {
         setUserData(null);
+        setHospitalData(null);
+        setDoctorData(null);
         setIsAdmin(false);
+        setUserType(null);
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
     return unsubscribe;
@@ -225,15 +326,20 @@ export function AuthProvider({ children }) {
   const value = {
     currentUser,
     userData,
+    hospitalData,
+    doctorData,
     isAdmin,
+    userType,
     signInWithGoogle,
+    hospitalLogin,
+    doctorLogin,
     logout,
     loading
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
