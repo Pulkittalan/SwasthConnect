@@ -26,24 +26,26 @@
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
-    padding: 10px;
+    padding: 15px;
     overflow-y: auto;
     align-items: flex-start;
     align-content: flex-start;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
     margin-right: 10px;
+    height: 100%;
 }
 
 .filter-box {
     flex: 1;
-    padding: 21px;
+    padding: 20px;
     background: white;
     border-radius: 10px;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-    height: calc(100vh - 40px);
+    height: 100%;
     overflow-y: auto;
-    min-width: 350px;
+    min-width: 300px;
+    max-width: 400px;
 }
 
 .filter-box h2 {
@@ -74,7 +76,7 @@
 .overall-stat {
     flex: 1;
     background: #f8f9fa;
-    padding: 10px;
+    padding: 12px 10px;
     border-radius: 8px;
     text-align: center;
     border: 1px solid #eee;
@@ -89,7 +91,7 @@
 
 .stat-value {
     display: block;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
     color: #333;
 }
@@ -122,20 +124,21 @@
 input[type="text"],
 input[type="number"] {
     width: 100%;
-    padding: 8px;
+    padding: 10px 12px;
     margin: 5px 0;
-    border-radius: 5px;
+    border-radius: 6px;
     border: 1px solid #ccc;
     font-size: 14px;
     box-sizing: border-box;
+    background: white;
 }
 
 .hospital-select:focus,
 input[type="text"]:focus,
 input[type="number"]:focus {
-    outline: none;
+    outline: 2px solid #28a745;
+    outline-offset: 1px;
     border-color: #28a745;
-    box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2);
 }
 
 .category-section {
@@ -160,12 +163,15 @@ input[type="number"]:focus {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 5px;
 }
 
 .category-btn {
-    padding: 10px;
+    padding: 12px 15px;
     border: 1px solid #ccc;
-    border-radius: 5px;
+    border-radius: 6px;
     background: #f8f9fa;
     color: #333;
     font-size: 14px;
@@ -175,11 +181,7 @@ input[type="number"]:focus {
     display: flex;
     align-items: center;
     gap: 8px;
-}
-
-.category-btn:hover:not(:disabled) {
-    background: #e9ecef;
-    border-color: #28a745;
+    width: 100%;
 }
 
 .category-btn.active {
@@ -189,12 +191,13 @@ input[type="number"]:focus {
 }
 
 .category-btn:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .btn-icon {
     font-size: 16px;
+    min-width: 24px;
 }
 
 .bed-count-badge {
@@ -202,9 +205,11 @@ input[type="number"]:focus {
     background: #007bff;
     color: white;
     font-size: 12px;
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: 3px 8px;
+    border-radius: 12px;
     font-weight: 600;
+    min-width: 35px;
+    text-align: center;
 }
 
 .bed-configuration {
@@ -217,7 +222,7 @@ input[type="number"]:focus {
 
 .config-header h3 {
     color: #333;
-    margin: 0 0 15px 0;
+    margin: 0 0 5px 0;
     font-size: 18px;
     font-weight: 600;
 }
@@ -233,13 +238,28 @@ input[type="number"]:focus {
     display: flex;
     flex-direction: column;
     gap: 15px;
+    margin-top: 15px;
+}
+
+.config-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.config-input-group label {
+    font-size: 13px;
+    color: #555;
+    font-weight: 600;
 }
 
 .config-input {
-    padding: 8px;
+    padding: 10px 12px;
     border: 1px solid #ccc;
-    border-radius: 5px;
+    border-radius: 6px;
     font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .input-hint {
@@ -250,10 +270,11 @@ input[type="number"]:focus {
 }
 
 .bed-preview {
-    padding: 10px;
+    padding: 12px;
     background: white;
-    border-radius: 5px;
+    border-radius: 6px;
     border: 1px solid #dee2e6;
+    margin-top: 10px;
 }
 
 .preview-stat {
@@ -281,21 +302,18 @@ input[type="number"]:focus {
 
 .cancel-btn, .submit-btn {
     flex: 1;
-    padding: 10px;
+    padding: 12px;
     border: none;
-    border-radius: 5px;
+    border-radius: 6px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    text-align: center;
 }
 
 .cancel-btn {
     background: #6c757d;
     color: white;
-}
-
-.cancel-btn:hover:not(:disabled) {
-    background: #5a6268;
 }
 
 .submit-btn {
@@ -307,12 +325,8 @@ input[type="number"]:focus {
     gap: 8px;
 }
 
-.submit-btn:hover:not(:disabled) {
-    background: #218838;
-}
-
 .submit-btn:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
@@ -325,20 +339,21 @@ input[type="number"]:focus {
     border-top: 2px solid white;
 }
 
-/* Bed Styling - NO ANIMATIONS, NO TRANSITIONS */
+/* Bed Styling */
 .bed {
-    width: 60px;
-    height: 60px;
+    width: 65px;
+    height: 65px;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    margin: 0px;
+    margin: 2px;
     cursor: pointer;
-    border-radius: 5px;
+    border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     position: relative;
     overflow: hidden;
     border: 2px solid transparent;
+    flex-shrink: 0;
 }
 
 .bed.available {
@@ -355,10 +370,10 @@ input[type="number"]:focus {
     left: 2px;
     background: rgba(0, 0, 0, 0.7);
     color: white;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: bold;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -370,13 +385,13 @@ input[type="number"]:focus {
     position: absolute;
     bottom: 2px;
     right: 2px;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: bold;
     color: white;
     z-index: 1;
@@ -393,14 +408,13 @@ input[type="number"]:focus {
 .category-title {
     text-align: left;
     font-family: Arial, sans-serif;
-    margin-bottom: 5px;
-    padding: 10px 15px;
-    background-color: rgba(255, 255, 255, 0.9);
+    margin: 10px 0 5px 0;
+    padding: 12px 15px;
+    background-color: rgba(255, 255, 255, 0.95);
     border-radius: 8px;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-    width: fit-content;
-    min-width: 250px;
-    margin-top: 15px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .category-title h2 {
@@ -408,17 +422,20 @@ input[type="number"]:focus {
     font-size: 18px;
     color: #333;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .category-stats {
     display: flex;
     gap: 10px;
-    margin-top: 5px;
+    margin-top: 8px;
     flex-wrap: wrap;
 }
 
 .category-stats span {
-    padding: 4px 8px;
+    padding: 4px 10px;
     border-radius: 4px;
     font-size: 12px;
     font-weight: 600;
@@ -457,7 +474,7 @@ input[type="number"]:focus {
 }
 
 .empty-state-icon {
-    font-size: 40px;
+    font-size: 48px;
     margin-bottom: 15px;
     opacity: 0.5;
 }
@@ -494,12 +511,15 @@ input[type="number"]:focus {
 }
 
 .hospital-details p {
-    margin: 5px 0;
+    margin: 8px 0;
     color: #555;
+    word-break: break-word;
 }
 
 .hospital-details strong {
     color: #333;
+    display: inline-block;
+    min-width: 80px;
 }
 
 .current-stats {
@@ -508,7 +528,7 @@ input[type="number"]:focus {
 
 .current-stats h3 {
     color: #333;
-    margin: 0 0 10px 0;
+    margin: 0 0 15px 0;
     font-size: 18px;
     font-weight: 600;
 }
@@ -516,13 +536,13 @@ input[type="number"]:focus {
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 12px;
 }
 
 .stat-card {
     background: #f8f9fa;
     border-radius: 8px;
-    padding: 12px;
+    padding: 15px;
     border: 1px solid #dee2e6;
 }
 
@@ -530,24 +550,26 @@ input[type="number"]:focus {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid #dee2e6;
 }
 
 .category-icon {
-    font-size: 18px;
+    font-size: 20px;
+    min-width: 24px;
 }
 
 .category-name {
     font-weight: 600;
     color: #333;
-    font-size: 14px;
+    font-size: 15px;
+    text-transform: capitalize;
 }
 
 .stat-card-body {
     display: grid;
-    gap: 6px;
+    gap: 8px;
 }
 
 .stat-item {
@@ -564,7 +586,7 @@ input[type="number"]:focus {
 
 .stat-item .stat-value {
     font-weight: 700;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .stat-item .available {
@@ -576,7 +598,7 @@ input[type="number"]:focus {
 }
 
 .occupancy-rate {
-    margin-top: 10px;
+    margin-top: 12px;
     padding-top: 10px;
     border-top: 1px solid #dee2e6;
 }
@@ -592,6 +614,7 @@ input[type="number"]:focus {
 
 .occupancy-fill {
     height: 100%;
+    background: #007bff;
 }
 
 .occupancy-text {
@@ -602,13 +625,15 @@ input[type="number"]:focus {
     font-weight: 600;
 }
 
-/* Notification System - NO ANIMATIONS */
+/* Notification System */
 .notification {
     position: fixed;
     top: 20px;
     right: 20px;
     z-index: 10000;
     display: none;
+    max-width: 350px;
+    width: 90%;
 }
 
 .notification.show {
@@ -616,16 +641,16 @@ input[type="number"]:focus {
 }
 
 .notification-content {
-    padding: 12px 20px;
+    padding: 15px 20px;
     border-radius: 8px;
     font-weight: 600;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-    min-width: 280px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     font-size: 14px;
     border: 1px solid rgba(255, 255, 255, 0.3);
+    word-break: break-word;
 }
 
 .notification.success {
@@ -655,25 +680,18 @@ input[type="number"]:focus {
     left: 20px;
     z-index: 1000;
     display: inline-block;
-    padding: 8px 15px;
+    padding: 8px 16px;
     border-radius: 8px;
     background: rgba(0, 255, 150, 0.3);
     color: white;
     text-decoration: none;
     font-weight: bold;
-    box-shadow: 0 0 10px rgba(0, 255, 150, 0.4);
     border: none;
     cursor: pointer;
     font-size: 14px;
 }
 
-.edit-link:hover {
-    background: white;
-    color: #00c6ff;
-    box-shadow: 0 0 15px rgba(0, 255, 150, 0.7);
-}
-
-/* Loading Overlay - NO SPINNER ANIMATION */
+/* Loading Overlay */
 .loading-overlay {
     position: fixed;
     top: 0;
@@ -706,6 +724,7 @@ input[type="number"]:focus {
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -716,108 +735,6 @@ input[type="number"]:focus {
 ::-webkit-scrollbar-thumb {
     background: #888;
     border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-    .container {
-        flex-direction: column;
-        padding: 15px;
-        height: auto;
-    }
-    
-    .beds-container {
-        flex: none;
-        height: 50vh;
-        margin-right: 0;
-        margin-bottom: 15px;
-    }
-    
-    .filter-box {
-        height: auto;
-        min-width: auto;
-        max-height: 50vh;
-    }
-    
-    .bed {
-        width: 55px;
-        height: 55px;
-    }
-}
-
-@media (max-width: 768px) {
-    .bed-management {
-        padding-top: 60px;
-    }
-    
-    .edit-link {
-        top: 10px;
-        left: 10px;
-        padding: 6px 12px;
-        font-size: 12px;
-    }
-    
-    .notification-content {
-        min-width: 250px;
-        font-size: 13px;
-        padding: 10px 15px;
-    }
-    
-    .bed {
-        width: 50px;
-        height: 50px;
-    }
-    
-    .bed-number, .bed-status-indicator {
-        width: 16px;
-        height: 16px;
-        font-size: 9px;
-    }
-    
-    .category-title {
-        min-width: 200px;
-        padding: 8px 12px;
-    }
-    
-    .category-title h2 {
-        font-size: 16px;
-    }
-    
-    .category-stats span {
-        font-size: 11px;
-        padding: 3px 6px;
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: 10px;
-        gap: 10px;
-    }
-    
-    .bed {
-        width: 45px;
-        height: 45px;
-    }
-    
-    .filter-box {
-        padding: 15px;
-    }
-    
-    .overall-stats {
-        flex-direction: column;
-    }
-    
-    .notification-content {
-        min-width: 220px;
-        left: 50%;
-        transform: translateX(-50%);
-        right: auto;
-    }
 }
 
 /* Remove ALL transitions, animations, and effects */
@@ -839,76 +756,303 @@ input[type="number"]:focus {
     user-select: none;
 }
 
-/* Remove focus outlines */
+/* Remove focus outlines but keep accessibility */
 *:focus {
     outline: none;
 }
 
-/* Remove hover effects from buttons */
-button:hover {
-    filter: none;
-    transform: none;
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .bed {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .filter-box {
+        min-width: 280px;
+        max-width: 350px;
+    }
 }
 
-/* Remove any button active states */
-button:active {
-    opacity: 1;
-    transform: none;
+@media (max-width: 992px) {
+    .container {
+        flex-direction: column;
+        padding: 15px;
+        overflow-y: auto;
+    }
+    
+    .bed-management {
+        overflow-y: auto;
+    }
+    
+    .beds-container {
+        flex: none;
+        height: 400px;
+        margin-right: 0;
+        margin-bottom: 15px;
+        width: 100%;
+    }
+    
+    .filter-box {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        min-height: 400px;
+    }
+    
+    .bed {
+        width: 55px;
+        height: 55px;
+    }
+    
+    .category-buttons {
+        max-height: 250px;
+    }
 }
 
-/* Make everything instant with no visual feedback */
-input, select, button, .bed {
-    cursor: pointer;
+@media (max-width: 768px) {
+    .bed-management {
+        padding-top: 50px;
+    }
+    
+    .edit-link {
+        top: 10px;
+        left: 10px;
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .notification {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+        max-width: none;
+    }
+    
+    .notification-content {
+        min-width: auto;
+        font-size: 13px;
+        padding: 12px 15px;
+    }
+    
+    .container {
+        padding: 10px;
+        gap: 10px;
+    }
+    
+    .beds-container {
+        height: 350px;
+        padding: 10px;
+    }
+    
+    .bed {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .bed-number, .bed-status-indicator {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+    }
+    
+    .filter-box {
+        padding: 15px;
+    }
+    
+    .filter-header h2 {
+        font-size: 20px;
+    }
+    
+    .overall-stats {
+        flex-wrap: wrap;
+    }
+    
+    .overall-stat {
+        min-width: 120px;
+    }
+    
+    .category-title {
+        padding: 10px 12px;
+    }
+    
+    .category-title h2 {
+        font-size: 16px;
+    }
+    
+    .category-stats span {
+        font-size: 11px;
+        padding: 3px 8px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .cancel-btn, .submit-btn {
+        width: 100%;
+    }
 }
 
-/* Remove any remaining hover effects */
-.hospital-select:hover, 
-input[type="text"]:hover,
-input[type="number"]:hover {
-    border-color: #ccc;
+@media (max-width: 576px) {
+    .beds-container {
+        height: 300px;
+    }
+    
+    .bed {
+        width: 45px;
+        height: 45px;
+    }
+    
+    .bed-number, .bed-status-indicator {
+        width: 16px;
+        height: 16px;
+        font-size: 9px;
+    }
+    
+    .overall-stats {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .overall-stat {
+        width: 100%;
+    }
+    
+    .hospital-details p {
+        font-size: 13px;
+    }
+    
+    .hospital-details strong {
+        min-width: 70px;
+    }
+    
+    .category-btn {
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+    
+    .btn-icon {
+        font-size: 14px;
+        min-width: 20px;
+    }
+    
+    .bed-count-badge {
+        font-size: 11px;
+        padding: 2px 6px;
+        min-width: 30px;
+    }
+    
+    .stat-card {
+        padding: 12px;
+    }
+    
+    .category-icon {
+        font-size: 18px;
+    }
+    
+    .category-name {
+        font-size: 14px;
+    }
+    
+    .stat-item .stat-value {
+        font-size: 14px;
+    }
 }
 
-/* Remove hover effects from category buttons */
-.category-btn:hover {
-    background: #f8f9fa;
-    border-color: #ccc;
+@media (max-width: 400px) {
+    .bed {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .bed-number, .bed-status-indicator {
+        width: 14px;
+        height: 14px;
+        font-size: 8px;
+    }
+    
+    .beds-container {
+        height: 250px;
+    }
+    
+    .category-title h2 {
+        font-size: 15px;
+    }
+    
+    .category-stats {
+        gap: 5px;
+    }
+    
+    .category-stats span {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
 }
 
-.category-btn.active:hover {
-    background: #28a745;
-    border-color: #218838;
+/* Landscape mode fixes */
+@media (max-height: 600px) and (orientation: landscape) {
+    .bed-management {
+        overflow-y: auto;
+    }
+    
+    .container {
+        flex-direction: row;
+        overflow-y: auto;
+    }
+    
+    .beds-container {
+        height: calc(100vh - 30px);
+        max-height: 500px;
+    }
+    
+    .filter-box {
+        height: calc(100vh - 30px);
+        overflow-y: auto;
+    }
+    
+    .category-buttons {
+        max-height: 200px;
+    }
 }
 
-/* Remove button hover effects */
-.cancel-btn:hover {
-    background: #6c757d;
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    .category-btn,
+    .cancel-btn,
+    .submit-btn,
+    .bed {
+        cursor: default;
+    }
+    
+    input, select, button {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
 }
 
-.submit-btn:hover {
-    background: #28a745;
-}
-
-/* Remove edit link hover effect */
-.edit-link:hover {
-    background: rgba(0, 255, 150, 0.3);
-    color: white;
-    box-shadow: 0 0 10px rgba(0, 255, 150, 0.4);
-}
-
-/* Remove all transitions from inputs on focus */
-.hospital-select:focus,
-input[type="text"]:focus,
-input[type="number"]:focus {
-    transition: none;
-    box-shadow: none;
-    border-color: #28a745;
-}
-
-/* Remove scrollbar animations */
-::-webkit-scrollbar-thumb {
-    transition: none;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #888;
+/* Ensure content is always readable */
+@media (max-width: 320px) {
+    .filter-box {
+        padding: 12px;
+    }
+    
+    .category-title {
+        padding: 8px 10px;
+    }
+    
+    .category-stats {
+        flex-direction: column;
+        gap: 3px;
+    }
+    
+    .category-stats span {
+        display: inline-block;
+        width: fit-content;
+    }
+    
+    .bed {
+        width: 38px;
+        height: 38px;
+    }
 }

@@ -59,36 +59,47 @@ img {
 
 .nav-links li {
   margin: 0 8px;
+  position: relative;
 }
 
-.nav-links a {
+.nav-links a,
+.nav-link-button {
   color: white;
   text-decoration: none;
   font-size: 18px;
   font-weight: 500;
   text-transform: uppercase;
-  padding: 4px 8px;
+  padding: 0px 8px;
   transition: color 0.3s ease, transform 0.3s ease;
   white-space: nowrap;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+  display: inline-block;
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-link-button:hover {
   color: #f9c513;
   transform: scale(1.1);
 }
 
-.nav-links a::after {
+.nav-links a::after,
+.nav-link-button::after {
   content: "";
   position: absolute;
   width: 0%;
-  height: 10px;
-  background-color: rgb(255, 0, 0);
+  height: 3px;
+  background-color: #f9c513;
   bottom: -5px;
-  left: 0px;
+  left: 0;
   transition: width 0.3s ease;
 }
 
-.nav-links a:hover::after {
+.nav-links a:hover::after,
+.nav-link-button:hover::after {
   width: 100%;
 }
 
@@ -102,22 +113,17 @@ img {
   background-color: #ffffff;
   color: rgb(0, 0, 0);
   font-size: 18px;
-  padding: 10px 20px; /* Slightly increased padding */
+  padding: 10px 20px;
   border: none;
   border-radius: 100px;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px; /* Increased gap slightly */
+  gap: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease-in-out;
   white-space: nowrap;
-  /* Remove the problematic positioning */
-  position: relative;
-  left: 300%;
-  bottom: auto;
-  /* Add margin auto to help with centering within its container */
   margin: 0;
 }
 
@@ -234,9 +240,22 @@ img {
   transform: rotate(-45deg) translate(7px, -6px);
 }
 
+/* User Type Badge */
+.user-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: 5px;
+  transition: all 0.3s ease;
+}
+
 /* Responsive Styles */
 @media (max-width: 1200px) {
-  .nav-links a {
+  .nav-links a,
+  .nav-link-button {
     font-size: 14px;
     margin: 0 4px;
   }
@@ -260,7 +279,8 @@ img {
     font-size: 22px;
   }
   
-  .nav-links a {
+  .nav-links a,
+  .nav-link-button {
     font-size: 13px;
   }
   
@@ -272,7 +292,6 @@ img {
     max-width: 120px;
   }
 }
-
 
 @media (max-width: 768px) {
   .navbar {
@@ -329,10 +348,18 @@ img {
     text-align: center;
   }
 
-  .nav-links a {
+  .nav-links a,
+  .nav-link-button {
     font-size: 16px;
     display: block;
     padding: 8px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .nav-links a::after,
+  .nav-link-button::after {
+    bottom: -2px;
   }
 
   .sign-in-container {
@@ -366,7 +393,7 @@ img {
   .google-btn {
     padding: 8px 15px;
     font-size: 14px;
-    position: static; /* Ensure it's not positioned */
+    position: static;
     left: auto;
     bottom: auto;
     gap: 6px;
@@ -428,7 +455,7 @@ img {
     padding: 6px 12px;
     font-size: 12px;
     gap: 5px;
-    position: static; /* Ensure it's not positioned */
+    position: static;
     left: auto;
     bottom: auto;
   }
@@ -446,51 +473,16 @@ img {
     width: 20px;
     height: 2px;
   }
+
+  .nav-links a,
+  .nav-link-button {
+    font-size: 14px;
+    padding: 6px;
+  }
 }
 
-@media (max-width: 320px) {
-  .logo{
-    width: 80px;
-    height: 80px;
-  }
-  .logo-title {
-   font-size: 16px;
-  }
-  .google-btn img {
-    width: 30px;
-    height: 18px;
-  }
-  .google-btn {
-    padding: 6px 12px;
-    font-size: 12px;
-    gap: 5px;
-    position: static; /* Ensure it's not positioned */
-    left: auto;
-    bottom: auto;
-  }
-  
-  .logo-section {
-    min-width: auto;
-  }
-  
-  
-  .nav-user-info {
-   
-   
-  }
-  
-  .user-profile-nav {
-    padding: 3px 6px;
-  }
-  
-  .logout-btn-nav {
-    font-size: 9px;
-    padding: 3px 6px;
-  }
-}
-/* For very small screens */
 @media (max-width: 380px) {
-  .logo{
+  .logo {
     width: 80px;
     height: 80px;
   }
@@ -501,19 +493,14 @@ img {
     width: 30px;
     height: 18px;
   }
-  .google-btn  {
-    width: px;
+  .google-btn {
+    width: auto;
     height: 30px;
+    padding: 4px 10px;
   }
   
   .logo-section {
     min-width: auto;
-  }
-  
-  
-  .nav-user-info {
-   
-   
   }
   
   .user-profile-nav {
@@ -524,9 +511,55 @@ img {
     font-size: 9px;
     padding: 3px 6px;
   }
+  
+  .nav-links a,
+  .nav-link-button {
+    font-size: 13px;
+    padding: 5px;
+  }
 }
 
-
+@media (max-width: 320px) {
+  .logo {
+    width: 80px;
+    height: 80px;
+  }
+  .logo-title {
+    font-size: 16px;
+  }
+  .google-btn img {
+    width: 30px;
+    height: 18px;
+  }
+  .google-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    gap: 5px;
+    position: static;
+    left: auto;
+    bottom: auto;
+  }
+  
+  .logo-section {
+    min-width: auto;
+  }
+  
+  .user-profile-nav {
+    padding: 3px 6px;
+  }
+  
+  .logout-btn-nav {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+  
+  
+  .nav-links a,
+  .nav-link-button {
+    font-size: 12px;
+    padding: 4px;
+  }
+}
 
 /* Animation */
 @keyframes spin {

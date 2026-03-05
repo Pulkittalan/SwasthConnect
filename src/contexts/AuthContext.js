@@ -15,6 +15,8 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -253,75 +255,116 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
-    const checkExistingSession = async (user) => {
-      if (user) {
-        try {
-          const adminStatus = await checkIfAdmin(user);
-          if (adminStatus) {
-            setIsAdmin(true);
-            setUserType('admin');
+  const checkExistingSession = async (user) => {
+    if (user) {
+      try {
+        // First check if this is an admin
+        const adminStatus = await checkIfAdmin(user);
+        if (adminStatus) {
+          setIsAdmin(true);
+          setUserType('admin');
+          setLoading(false);
+          return;
+        }
+
+        // Check for hospital session from localStorage
+        const storedHospitalId = localStorage.getItem('hospitalId');
+        const storedUserType = localStorage.getItem('userType');
+        
+        if (storedHospitalId && storedUserType === 'hospital') {
+          const hospitalRef = doc(db, 'hospitals', storedHospitalId);
+          const hospitalSnap = await getDoc(hospitalRef);
+          
+          if (hospitalSnap.exists() && hospitalSnap.data().email === user.email) {
+            setHospitalData(hospitalSnap.data());
+            setUserType('hospital');
+            
+            // Update last login
+            await updateDoc(hospitalRef, {
+              lastLogin: new Date().toISOString()
+            });
+            
             setLoading(false);
             return;
+          } else {
+            // Invalid hospital session, clear it
+            localStorage.removeItem('hospitalId');
+            localStorage.removeItem('hospitalName');
+            localStorage.removeItem('userType');
           }
-
-          const storedHospitalId = localStorage.getItem('hospitalId');
-          if (storedHospitalId) {
-            const hospitalRef = doc(db, 'hospitals', storedHospitalId);
-            const hospitalSnap = await getDoc(hospitalRef);
-            
-            if (hospitalSnap.exists() && hospitalSnap.data().email === user.email) {
-              setHospitalData(hospitalSnap.data());
-              setUserType('hospital');
-              setLoading(false);
-              return;
-            }
-          }
-
-          const storedDoctorId = localStorage.getItem('doctorId');
-          if (storedDoctorId) {
-            const doctorRef = doc(db, 'doctors', storedDoctorId);
-            const doctorSnap = await getDoc(doctorRef);
-            
-            if (doctorSnap.exists() && doctorSnap.data().email === user.email) {
-              setDoctorData(doctorSnap.data());
-              setUserType('doctor');
-              setLoading(false);
-              return;
-            }
-          }
-
-          const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
-          
-          if (userSnap.exists()) {
-            setUserData(userSnap.data());
-            setUserType('user');
-          }
-          
-        } catch (error) {
-          console.error("Error checking session:", error);
         }
-      }
-      setLoading(false);
-    };
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
+        // Check for doctor session from localStorage
+        const storedDoctorId = localStorage.getItem('doctorId');
+        if (storedDoctorId && storedUserType === 'doctor') {
+          const doctorRef = doc(db, 'doctors', storedDoctorId);
+          const doctorSnap = await getDoc(doctorRef);
+          
+          if (doctorSnap.exists() && doctorSnap.data().email === user.email) {
+            setDoctorData(doctorSnap.data());
+            setUserType('doctor');
+            
+            // Update last login
+            await updateDoc(doctorRef, {
+              lastLogin: new Date().toISOString()
+            });
+            
+            setLoading(false);
+            return;
+          } else {
+            // Invalid doctor session, clear it
+            localStorage.removeItem('doctorId');
+            localStorage.removeItem('doctorName');
+            localStorage.removeItem('userType');
+          }
+        }
+
+        // If no specific role found, check regular users
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          setUserData(userSnap.data());
+          setUserType('user');
+          localStorage.setItem('userType', 'user');
+        }
+        
+      } catch (error) {
+        console.error("Error checking session:", error);
+      }
+    }
+    setLoading(false);
+  };
+
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    setCurrentUser(user);
+    
+    if (user) {
+      await checkExistingSession(user);
+    } else {
+      // Clear all states when user signs out
+      setUserData(null);
+      setHospitalData(null);
+      setDoctorData(null);
+      setIsAdmin(false);
+      setUserType(null);
       
-      if (user) {
-        await checkExistingSession(user);
-      } else {
-        setUserData(null);
-        setHospitalData(null);
-        setDoctorData(null);
-        setIsAdmin(false);
-        setUserType(null);
-        setLoading(false);
-      }
-    });
+      // Clear all localStorage items
+      localStorage.removeItem('userType');
+      localStorage.removeItem('hospitalId');
+      localStorage.removeItem('hospitalName');
+      localStorage.removeItem('doctorId');
+      localStorage.removeItem('doctorName');
+      localStorage.removeItem('isAdmin');
+      localStorage.removeItem('adminEmail');
+      localStorage.removeItem('adminUid');
+      
+      setLoading(false);
+    }
+  });
 
-    return unsubscribe;
-  }, []);
+  return unsubscribe;
+}, []);
 
   const value = {
     currentUser,

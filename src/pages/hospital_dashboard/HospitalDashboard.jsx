@@ -190,7 +190,7 @@ const HospitalDashboard = () => {
             textAlign: 'center',
             marginTop: '10px'
           }}>
-            Swasthya Setu
+            SwasthConnect
           </div>
           <p style={{ color: '#64748b', marginTop: '5px', textAlign: 'center' }}>Connecting Healthcare...</p>
         </div>
@@ -216,7 +216,7 @@ const HospitalDashboard = () => {
           <div className="header-logo" onClick={handleLogoClick}>
             <LogoComponent />
             <div className="logo-text">
-              <h1>Swasthya Setu</h1>
+              <h1>SwasthConnect</h1>
               <span>Healthcare Bridge System</span>
             </div>
           </div>
