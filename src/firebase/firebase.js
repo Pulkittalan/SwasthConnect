@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore"; // Using Firestore instead of Realtime Database
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // Using Firestore instead of Realtime Database
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -16,6 +17,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app); // Firestore database
+const db = getFirestore(app);
+const storage = getStorage(app); // Firestore database
 
-export { auth, db, app };
+export { auth, db, app, storage };
