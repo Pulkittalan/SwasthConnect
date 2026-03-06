@@ -11,6 +11,8 @@
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.13.2",
+    "crypto-js": "^4.2.0",
+    "ethers": "^6.16.0",
     "firebase": "^12.7.0",
     "jspdf": "^3.0.4",
     "jwt-decode": "^4.0.0",
