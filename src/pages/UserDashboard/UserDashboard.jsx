@@ -6,6 +6,7 @@
   import { useNavigate } from 'react-router-dom';
   import './UserDashboard.css';
   import SHA256 from "crypto-js/sha256";
+  import CryptoJS from "crypto-js";
 import { getContract } from "../../blockchain/medicalContract";
   
 
@@ -198,29 +199,56 @@ import { getContract } from "../../blockchain/medicalContract";
 
     const handleUploadRecord = async (e) => {
       e.preventDefault();
+
       if (!selectedFile) {
-        setUploadError('Please select a file to upload');
+        setUploadError("Please select a file to upload");
         return;
       }
 
       setUploading(true);
-      setUploadError('');
-      setUploadSuccess('');
+      setUploadError("");
+      setUploadSuccess("");
 
       try {
-        // Upload file to Firebase Storage
+
+        const recordId = crypto.randomUUID();
+        // Generate file hash BEFORE upload
+        const fileHash = await generateFileHash(selectedFile);
+        console.log("Generated File Hash:", fileHash);
+
+        console.log("patientId:", currentUser.uid);
+        console.log("recordId:", recordId);
+        console.log("hash:", fileHash);
+        console.log("recordType:", recordType);
+        console.log("fileName:", selectedFile.name);
+
+        // Upload to Firebase Storage
         const timestamp = Date.now();
         const fileName = `${timestamp}_${selectedFile.name}`;
+
         const storageRef = ref(
           storage,
           `medicalRecords/${currentUser.uid}/${recordType}/${fileName}`,
         );
+
         await uploadBytes(storageRef, selectedFile);
+
         const fileUrl = await getDownloadURL(storageRef);
 
-        // Save record metadata to Firestore
+        console.log("File URL:", fileUrl);
+
+        const blockchainTx = await storeHashOnBlockchain(
+          currentUser.uid,
+          recordId,
+          fileHash,
+          recordType,
+          selectedFile.name,
+        );
+
+        // Save metadata in Firestore
         const recordData = {
           userId: currentUser.uid,
+          recordId: recordId,
           type: recordType,
           fileName: selectedFile.name,
           fileUrl: fileUrl,
@@ -228,23 +256,15 @@ import { getContract } from "../../blockchain/medicalContract";
           uploadedAt: new Date().toISOString(),
           fileSize: selectedFile.size,
           mimeType: selectedFile.type,
+          blockchainHash: fileHash,
+          blockchainTx: blockchainTx,
         };
-
-        // Generate record hash
-        const recordHash = generateHash(recordData);
-
-        // Store hash on blockchain
-        await storeHashOnBlockchain(currentUser.uid, recordHash);
-
-        // Save hash in Firebase
-        recordData.blockchainHash = recordHash;
 
         const docRef = await addDoc(
           collection(db, "medicalRecords"),
           recordData,
         );
 
-        // Update local state
         setMedicalRecords((prev) => [
           {
             id: docRef.id,
@@ -253,17 +273,16 @@ import { getContract } from "../../blockchain/medicalContract";
           ...prev,
         ]);
 
-        setUploadSuccess("Record uploaded successfully!");
+        setUploadSuccess(
+          "Record uploaded securely with blockchain verification!",
+        );
 
-        // Reset form
         setSelectedFile(null);
         setRecordDescription("");
         document.getElementById("fileInput").value = "";
-
-        setTimeout(() => setUploadSuccess(""), 3000);
       } catch (error) {
         console.error("Error uploading record:", error);
-        setUploadError('Failed to upload record. Please try again.');
+        setUploadError("Failed to upload record. Please try again.");
       } finally {
         setUploading(false);
       }
@@ -271,52 +290,64 @@ import { getContract } from "../../blockchain/medicalContract";
 
     const handleBookAppointment = async (e) => {
       e.preventDefault();
-      
-      if (!selectedHospital || !selectedDoctor || !appointmentDate || !appointmentTime) {
-        setBookingError('Please fill in all required fields');
+
+      if (
+        !selectedHospital ||
+        !selectedDoctor ||
+        !appointmentDate ||
+        !appointmentTime
+      ) {
+        setBookingError("Please fill in all required fields");
         return;
       }
 
-      setBookingError('');
-      setBookingSuccess('');
+      setBookingError("");
+      setBookingSuccess("");
 
       try {
         const appointmentData = {
           userId: currentUser.uid,
-          userName: userData?.displayName || 'User',
+          userName: userData?.displayName || "User",
           userEmail: currentUser.email,
-          userPhone: userData?.phone || '',
+          userPhone: userData?.phone || "",
           hospitalId: selectedHospital,
-          hospitalName: hospitals.find(h => h.id === selectedHospital)?.name || '',
+          hospitalName:
+            hospitals.find((h) => h.id === selectedHospital)?.name || "",
           doctorId: selectedDoctor,
-          doctorName: doctors.find(d => d.id === selectedDoctor)?.name || '',
+          doctorName: doctors.find((d) => d.id === selectedDoctor)?.name || "",
           date: appointmentDate,
           time: appointmentTime,
           reason: appointmentReason,
-          status: 'scheduled',
-          createdAt: new Date().toISOString()
+          status: "scheduled",
+          createdAt: new Date().toISOString(),
         };
 
-        const docRef = await addDoc(collection(db, 'appointments'), appointmentData);
-        
-        setAppointments(prev => [{
-          id: docRef.id,
-          ...appointmentData
-        }, ...prev]);
+        const docRef = await addDoc(
+          collection(db, "appointments"),
+          appointmentData,
+        );
 
-        setBookingSuccess('Appointment booked successfully!');
-        
+        setAppointments((prev) => [
+          {
+            id: docRef.id,
+            ...appointmentData,
+          },
+          ...prev,
+        ]);
+
+        setBookingSuccess("Appointment booked successfully!");
+
         // Reset form
-        setSelectedHospital('');
-        setSelectedDoctor('');
-        setAppointmentDate('');
-        setAppointmentTime('');
-        setAppointmentReason('');
+        setSelectedHospital("");
+        setSelectedDoctor("");
+        setAppointmentDate("");
+        setAppointmentTime("");
+        setAppointmentReason("");
 
-        setTimeout(() => setBookingSuccess(''), 3000);
+        setTimeout(() => setBookingSuccess(""), 3000);
       } catch (error) {
         console.error("Error booking appointment:", error);
-        setBookingError('Failed to book appointment. Please try again.');
+        setBookingError("Failed to book appointment. Please try again.");
       }
     };
 
@@ -337,30 +368,54 @@ import { getContract } from "../../blockchain/medicalContract";
       return (bytes / (1024 * 1024)).toFixed(1) + " MB";
     };
 
-    const storeHashOnBlockchain = async (patientId, hash) => {
+    const storeHashOnBlockchain = async (
+      patientId,
+      recordId,
+      hash,
+      recordType,
+      fileName,
+    ) => {
+      try {
+        const contract = await getContract();
 
-  try {
+        if (!contract) return null;
 
-    const contract = await getContract();
+        const tx = await contract.addRecord(
+          patientId,
+          recordId,
+          hash,
+          recordType,
+          fileName,
+          {
+            gasLimit: 500000,
+          },
+        );
 
-    if (!contract) return;
+        console.log("Calling contract with:", {
+          patientId,
+          recordId,
+          hash,
+          recordType,
+          fileName,
+        });
+        console.log("Transaction sent:", tx.hash);
 
-    const tx = await contract.addRecord(patientId, hash);
+        await tx.wait();
 
-    await tx.wait();
+        console.log("Blockchain TX confirmed:", tx.hash);
 
-    console.log("Record hash stored on blockchain");
+        return tx.hash;
+      } catch (error) {
+        console.error("Blockchain error:", error);
+        return null;
+      }
+    };
 
-  } catch (error) {
-
-    console.error("Blockchain error:", error);
-
-  }
-
-};
-
-    const generateHash = (data) => {
-      return SHA256(JSON.stringify(data)).toString();
+    const generateFileHash = async (file) => {
+      const buffer = await file.arrayBuffer();
+      const wordArray = CryptoJS.lib.WordArray.create(buffer);
+      const hash = SHA256(wordArray).toString();
+      return hash;
     };
 
     if (loading) {
