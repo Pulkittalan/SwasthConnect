@@ -725,3 +725,535 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Modal Styles for Hospital Search */
+.user-dashboard .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+.user-dashboard .modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: slideUp 0.3s ease;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.user-dashboard .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 25px;
+  border-bottom: 2px solid #eef2f6;
+  background: linear-gradient(135deg, #f8faff 0%, #ffffff 100%);
+  border-radius: 16px 16px 0 0;
+}
+
+.user-dashboard .modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #4074e6;
+}
+
+.user-dashboard .modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.3s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.user-dashboard .modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.user-dashboard .modal-body {
+  padding: 25px;
+}
+
+.user-dashboard .search-input-container {
+  position: relative;
+  margin-bottom: 25px;
+}
+
+.user-dashboard .search-input {
+  width: 100%;
+  padding: 14px 20px;
+  border: 2px solid #eef2f6;
+  border-radius: 12px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.user-dashboard .search-input:focus {
+  outline: none;
+  border-color: #4074e6;
+  box-shadow: 0 0 0 3px rgba(64, 116, 230, 0.1);
+}
+
+.user-dashboard .search-spinner {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid #eef2f6;
+  border-top-color: #4074e6;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.user-dashboard .search-results {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.user-dashboard .hospital-card {
+  background: #f8faff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #eef2f6;
+  transition: all 0.3s ease;
+}
+
+.user-dashboard .hospital-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #4074e6;
+}
+
+.user-dashboard .hospital-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #eef2f6;
+}
+
+.user-dashboard .hospital-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.user-dashboard .hospital-status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.user-dashboard .status-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.user-dashboard .status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.user-dashboard .hospital-details {
+  margin-bottom: 15px;
+}
+
+.user-dashboard .hospital-details p {
+  margin: 8px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.user-dashboard .bed-availability {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  margin: 15px 0;
+  border: 1px solid #eef2f6;
+}
+
+.user-dashboard .bed-availability h4 {
+  margin: 0 0 12px 0;
+  color: #4074e6;
+  font-size: 16px;
+}
+
+.user-dashboard .bed-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.user-dashboard .bed-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8faff;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.user-dashboard .bed-label {
+  font-weight: 500;
+  color: #666;
+}
+
+.user-dashboard .bed-value {
+  font-weight: bold;
+  color: #333;
+  font-size: 16px;
+}
+
+.user-dashboard .bed-data-detailed {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f6;
+}
+
+.user-dashboard .bed-data-detailed h5 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.user-dashboard .ward-details {
+  padding: 8px 0;
+  font-size: 13px;
+  color: #555;
+}
+
+.user-dashboard .last-updated {
+  font-size: 11px;
+  color: #999;
+  margin-left: 8px;
+}
+
+.user-dashboard .hospital-facilities {
+  margin: 15px 0;
+}
+
+.user-dashboard .facilities-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.user-dashboard .facility-tag {
+  background: #e8f4fe;
+  color: #4074e6;
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.user-dashboard .hospital-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f6;
+  font-size: 12px;
+  color: #888;
+}
+
+.user-dashboard .established-year {
+  font-style: italic;
+}
+
+.user-dashboard .emergency-contact {
+  color: #ff4757;
+  font-weight: 500;
+}
+
+.user-dashboard .no-results,
+.user-dashboard .search-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+}
+
+.user-dashboard .search-placeholder p {
+  font-size: 16px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Responsive Design for Modal */
+@media (max-width: 768px) {
+  .user-dashboard .modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+  
+  .user-dashboard .modal-header h2 {
+    font-size: 20px;
+  }
+  
+  .user-dashboard .hospital-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .user-dashboard .bed-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .user-dashboard .hospital-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
+
+/* Bed Request Button */
+.user-dashboard .bed-request-btn {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-dashboard .bed-request-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(238, 90, 36, 0.3);
+}
+
+/* Bed Request Modal */
+.user-dashboard .bed-request-modal {
+  max-width: 700px;
+}
+
+.user-dashboard .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.user-dashboard .checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Bed Requests List */
+.user-dashboard .bed-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.user-dashboard .bed-request-card {
+  background: #f8faff;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #eef2f6;
+  transition: all 0.3s ease;
+}
+
+.user-dashboard .bed-request-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.user-dashboard .bed-request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #eef2f6;
+}
+
+.user-dashboard .bed-request-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.user-dashboard .bed-request-details {
+  margin-bottom: 15px;
+}
+
+.user-dashboard .detail-row {
+  display: flex;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.user-dashboard .detail-row:last-child {
+  border-bottom: none;
+}
+
+.user-dashboard .detail-label {
+  font-weight: 600;
+  width: 120px;
+  color: #666;
+}
+
+.user-dashboard .detail-value {
+  flex: 1;
+  color: #333;
+}
+
+.user-dashboard .emergency-badge {
+  background: #ff4757;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 10px 0;
+}
+
+.user-dashboard .request-action {
+  margin-top: 15px;
+  text-align: right;
+}
+
+.user-dashboard .contact-hospital-btn {
+  background: #4074e6;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.user-dashboard .contact-hospital-btn:hover {
+  background: #2a5ac9;
+  transform: translateY(-2px);
+}
+
+/* Status Badges for Bed Requests */
+.user-dashboard .status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.user-dashboard .status-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.user-dashboard .status-rejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.user-dashboard .status-allocated {
+  background: #cce5ff;
+  color: #004085;
+}
+
+/* Bed Stats Enhancement */
+.user-dashboard .bed-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.user-dashboard .bed-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8faff;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.user-dashboard .bed-label {
+  font-weight: 500;
+  color: #666;
+}
+
+.user-dashboard .bed-value {
+  font-weight: bold;
+  color: #333;
+  font-size: 16px;
+}
+
+/* Responsive Design for Bed Requests */
+@media (max-width: 768px) {
+  .user-dashboard .detail-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .user-dashboard .detail-label {
+    width: auto;
+  }
+  
+  .user-dashboard .bed-request-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .user-dashboard .bed-stats {
+    grid-template-columns: 1fr;
+  }
+}

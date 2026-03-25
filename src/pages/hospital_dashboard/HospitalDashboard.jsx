@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, onSnapshot } from 'firebase/firestore';
 import { useParams, useNavigate } from 'react-router-dom';
 import './HospitalDashboard.css';
+import BedRequestManagement from '../bedrequest/BedRequestManagement';
 
 const HospitalDashboard = () => {
   const { hospitalId } = useParams();
   const navigate = useNavigate();
   const [hospitalData, setHospitalData] = useState(null);
   const [bedData, setBedData] = useState({});
+  const [bedsList, setBedsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('table');
   const [logoError, setLogoError] = useState(false);
@@ -20,6 +22,7 @@ const HospitalDashboard = () => {
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [bedRequests, setBedRequests] = useState([]);
   const [loadingSection, setLoadingSection] = useState(false);
   
   // Form states
@@ -43,6 +46,7 @@ const HospitalDashboard = () => {
     admissionDate: new Date().toISOString().split('T')[0],
     status: 'admitted',
     bedType: '',
+    bedId: '',
     doctorAssigned: '',
     doctorId: '',
     patientId: '',
@@ -77,9 +81,57 @@ const HospitalDashboard = () => {
     notes: ''
   });
 
-  // Logo URLs - Change these to your actual logo paths
-  const logoUrl = './logo.png'; // Place logo.png in public folder
-  const fallbackLogoText = 'SS'; // Swasthya Setu initials
+  // Logo URLs
+  const logoUrl = './logo.png';
+  const fallbackLogoText = 'SS';
+
+  // Real-time subscription to beds
+  useEffect(() => {
+    if (!hospitalId) return;
+    
+    const bedsRef = collection(db, 'hospitals', hospitalId, 'beds');
+    const unsubscribe = onSnapshot(bedsRef, (snapshot) => {
+      const beds = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setBedsList(beds);
+      
+      // Transform beds into bedData format for compatibility
+      const transformedBedData = {};
+      beds.forEach(bed => {
+        if (!transformedBedData[bed.type]) {
+          transformedBedData[bed.type] = {
+            totalBeds: 0,
+            availableBeds: 0,
+            floors: {}
+          };
+        }
+        transformedBedData[bed.type].totalBeds++;
+        if (bed.status === 'available') {
+          transformedBedData[bed.type].availableBeds++;
+        }
+        
+        const floor = bed.floor || '1';
+        if (!transformedBedData[bed.type].floors[floor]) {
+          transformedBedData[bed.type].floors[floor] = { total: 0, available: 0 };
+        }
+        transformedBedData[bed.type].floors[floor].total++;
+        if (bed.status === 'available') {
+          transformedBedData[bed.type].floors[floor].available++;
+        }
+      });
+      
+      setBedData(transformedBedData);
+    });
+    
+    // Return cleanup function
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [hospitalId]);
 
   useEffect(() => {
     const fetchHospitalData = async () => {
@@ -90,12 +142,12 @@ const HospitalDashboard = () => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setHospitalData(data);
-          setBedData(data.bedData || {});
           
           // Fetch additional data based on hospital ID
           await fetchPatients(hospitalId);
           await fetchDoctors(hospitalId);
           await fetchAppointments(hospitalId);
+          await fetchBedRequests(hospitalId);
         } else {
           console.error('Hospital not found');
           setFormError('Hospital not found');
@@ -124,7 +176,6 @@ const HospitalDashboard = () => {
       setPatients(patientsList);
     } catch (error) {
       console.error('Error fetching patients:', error);
-      // For demo, set mock data if Firebase fails
       setPatients(getMockPatients());
     }
   };
@@ -140,7 +191,6 @@ const HospitalDashboard = () => {
       setDoctors(doctorsList);
     } catch (error) {
       console.error('Error fetching doctors:', error);
-      // For demo, set mock data if Firebase fails
       setDoctors(getMockDoctors());
     }
   };
@@ -156,12 +206,33 @@ const HospitalDashboard = () => {
       setAppointments(appointmentsList);
     } catch (error) {
       console.error('Error fetching appointments:', error);
-      // For demo, set mock data if Firebase fails
       setAppointments(getMockAppointments());
     }
   };
 
-  // Mock data functions
+  const fetchBedRequests = async (hospitalId) => {
+    try {
+      if (!hospitalId) {
+        console.error('No hospital ID provided');
+        return;
+      }
+      
+      const requestsRef = collection(db, 'hospitals', hospitalId, 'bedRequests');
+      const q = query(requestsRef, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      const requestsList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setBedRequests(requestsList);
+    } catch (error) {
+      console.error('Error fetching bed requests:', error);
+      setBedRequests([]);
+    }
+  };
+
   const getMockPatients = () => [
     {
       id: 'P001',
@@ -178,22 +249,6 @@ const HospitalDashboard = () => {
       address: 'Delhi',
       emergencyContact: '+91 98765 43211',
       patientId: 'P001'
-    },
-    {
-      id: 'P002',
-      name: 'Anita Desai',
-      age: 32,
-      gender: 'Female',
-      bloodGroup: 'A+',
-      contact: '+91 98765 43211',
-      admissionDate: '2026-03-02',
-      bedType: 'General Ward',
-      doctorAssigned: 'Dr. Rajesh Kumar',
-      doctorId: 'D002',
-      status: 'admitted',
-      address: 'Noida',
-      emergencyContact: '+91 98765 43212',
-      patientId: 'P002'
     }
   ];
 
@@ -214,23 +269,6 @@ const HospitalDashboard = () => {
       department: 'Cardiology',
       doctorId: 'D001',
       joiningDate: '2024-01-15'
-    },
-    {
-      id: 'D002',
-      name: 'Dr. Rajesh Kumar',
-      specialization: 'Neurologist',
-      qualification: 'MD, DM Neurology',
-      experience: 15,
-      contact: '+91 98765 43221',
-      email: 'rajesh.kumar@hospital.com',
-      availability: 'busy',
-      consultationFee: 1000,
-      patientsCount: 38,
-      rating: 4.9,
-      address: 'Noida',
-      department: 'Neurology',
-      doctorId: 'D002',
-      joiningDate: '2023-06-20'
     }
   ];
 
@@ -245,17 +283,6 @@ const HospitalDashboard = () => {
       time: '10:00 AM',
       type: 'Follow-up',
       status: 'scheduled'
-    },
-    {
-      id: 'A002',
-      patientName: 'Anita Desai',
-      patientId: 'P002',
-      doctorName: 'Dr. Rajesh Kumar',
-      doctorId: 'D002',
-      date: '2026-03-05',
-      time: '11:30 AM',
-      type: 'Consultation',
-      status: 'confirmed'
     }
   ];
 
@@ -283,7 +310,6 @@ const HospitalDashboard = () => {
     
     const encrypted = btoa(encodeURIComponent(dataToEncrypt));
     
-    // For HashRouter, we need to include the hash
     return `#/bed-management?token=${encrypted}&h=${currentHospitalId}&t=${timestamp}`;
   };
 
@@ -308,24 +334,13 @@ const HospitalDashboard = () => {
 
   const getCategoryIcon = (category) => {
     const icons = {
-      'icu': '🫀',
-      'general': '🛌',
-      'pediatric': '👶',
-      'maternity': '🤰',
-      'emergency': '🚨',
-      'surgical': '🔪',
-      'psychiatric': '🧠',
-      'isolation': '🦠',
-      'recovery': '💤',
-      'ccu': '❤️',
-      'cardiac': '💓',
-      'orthopedic': '🦴',
-      'neurology': '🧠',
-      'oncology': '🎗️',
-      'burn': '🔥'
+      'ICU': '💙',
+      'Emergency': '🚨',
+      'Surgical': '💚',
+      'General Ward': '🛏️',
+      'Private Room': '🏠'
     };
-    
-    return icons[category.toLowerCase()] || '🛏️';
+    return icons[category] || '🛏️';
   };
 
   const getStatusLabel = (available) => {
@@ -335,16 +350,13 @@ const HospitalDashboard = () => {
     return { label: 'Full', color: '#dc2626' };
   };
 
-  // Generate unique ID for patient/doctor
   const generateId = (prefix) => {
     const timestamp = Date.now().toString().slice(-6);
     const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     return `${prefix}${timestamp}${random}`;
   };
 
-  // Handle Add Patient to Firebase
   const handleAddPatient = async () => {
-    // Validate form
     if (!newPatient.name || !newPatient.age || !newPatient.gender || !newPatient.contact) {
       setFormError('Please fill in all required fields');
       return;
@@ -355,10 +367,14 @@ const HospitalDashboard = () => {
     setFormSuccess('');
 
     try {
-      // Generate patient ID if not provided
       const patientId = newPatient.patientId || generateId('P');
       
-      // Prepare patient data matching your Firebase structure
+      // Find selected bed if bedType and bedId are provided
+      let selectedBed = null;
+      if (newPatient.bedId) {
+        selectedBed = bedsList.find(b => b.id === newPatient.bedId);
+      }
+      
       const patientData = {
         patientId: patientId,
         name: newPatient.name,
@@ -372,23 +388,33 @@ const HospitalDashboard = () => {
         admissionDate: newPatient.admissionDate || new Date().toISOString().split('T')[0],
         status: newPatient.status || 'admitted',
         bedType: newPatient.bedType || '',
+        bedId: newPatient.bedId || '',
+        bedNumber: selectedBed?.bedId || '',
         doctorAssigned: newPatient.doctorAssigned || '',
         doctorId: newPatient.doctorId || '',
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
         hospitalId: hospitalId,
-        // Additional fields
         city: hospitalData?.city || '',
         state: hospitalData?.state || '',
       };
 
-      // Add to Firestore under hospitals/{hospitalId}/patients
       const patientsRef = collection(db, 'hospitals', hospitalId, 'patients');
       const docRef = await addDoc(patientsRef, patientData);
+      
+      // If bed is selected, update bed status
+      if (selectedBed && selectedBed.status === 'available') {
+        const bedRef = doc(db, 'hospitals', hospitalId, 'beds', selectedBed.id);
+        await updateDoc(bedRef, {
+          status: 'occupied',
+          patientId: patientId,
+          patientName: newPatient.name,
+          patientAge: parseInt(newPatient.age),
+          patientCondition: 'admitted',
+          admissionDate: serverTimestamp()
+        });
+      }
 
-      console.log('Patient added with ID:', docRef.id);
-
-      // Update local state
       const newPatientWithId = {
         id: docRef.id,
         ...patientData,
@@ -397,11 +423,8 @@ const HospitalDashboard = () => {
       };
 
       setPatients(prev => [...prev, newPatientWithId]);
-      
-      // Show success message
       setFormSuccess('Patient added successfully!');
       
-      // Reset form
       setNewPatient({
         name: '',
         age: '',
@@ -414,12 +437,12 @@ const HospitalDashboard = () => {
         admissionDate: new Date().toISOString().split('T')[0],
         status: 'admitted',
         bedType: '',
+        bedId: '',
         doctorAssigned: '',
         doctorId: '',
         patientId: '',
       });
 
-      // Close form after 2 seconds
       setTimeout(() => {
         setShowPatientForm(false);
         setFormSuccess('');
@@ -433,9 +456,7 @@ const HospitalDashboard = () => {
     }
   };
 
-  // Handle Add Doctor to Firebase
   const handleAddDoctor = async () => {
-    // Validate form
     if (!newDoctor.name || !newDoctor.specialization || !newDoctor.contact) {
       setFormError('Please fill in all required fields');
       return;
@@ -446,10 +467,8 @@ const HospitalDashboard = () => {
     setFormSuccess('');
 
     try {
-      // Generate doctor ID if not provided
       const doctorId = newDoctor.doctorId || generateId('D');
       
-      // Prepare doctor data matching your Firebase structure
       const doctorData = {
         doctorId: doctorId,
         name: newDoctor.name,
@@ -468,19 +487,14 @@ const HospitalDashboard = () => {
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
         hospitalId: hospitalId,
-        // Additional fields matching your structure
         city: hospitalData?.city || '',
         state: hospitalData?.state || '',
         status: 'active'
       };
 
-      // Add to Firestore under hospitals/{hospitalId}/doctors
       const doctorsRef = collection(db, 'hospitals', hospitalId, 'doctors');
       const docRef = await addDoc(doctorsRef, doctorData);
 
-      console.log('Doctor added with ID:', docRef.id);
-
-      // Update local state
       const newDoctorWithId = {
         id: docRef.id,
         ...doctorData,
@@ -489,11 +503,8 @@ const HospitalDashboard = () => {
       };
 
       setDoctors(prev => [...prev, newDoctorWithId]);
-      
-      // Show success message
       setFormSuccess('Doctor added successfully!');
       
-      // Reset form
       setNewDoctor({
         name: '',
         specialization: '',
@@ -509,7 +520,6 @@ const HospitalDashboard = () => {
         doctorId: '',
       });
 
-      // Close form after 2 seconds
       setTimeout(() => {
         setShowDoctorForm(false);
         setFormSuccess('');
@@ -524,7 +534,6 @@ const HospitalDashboard = () => {
   };
 
   const handleAddAppointment = async () => {
-    // Validate form
     if (!newAppointment.patientName || !newAppointment.doctorName || !newAppointment.date || !newAppointment.time) {
       setFormError('Please fill in all required fields');
       return;
@@ -535,10 +544,8 @@ const HospitalDashboard = () => {
     setFormSuccess('');
 
     try {
-      // Generate appointment ID
       const appointmentId = generateId('A');
       
-      // Prepare appointment data
       const appointmentData = {
         appointmentId: appointmentId,
         patientName: newAppointment.patientName,
@@ -555,13 +562,9 @@ const HospitalDashboard = () => {
         hospitalId: hospitalId
       };
 
-      // Add to Firestore under hospitals/{hospitalId}/appointments
       const appointmentsRef = collection(db, 'hospitals', hospitalId, 'appointments');
       const docRef = await addDoc(appointmentsRef, appointmentData);
 
-      console.log('Appointment added with ID:', docRef.id);
-
-      // Update local state
       const newAppointmentWithId = {
         id: docRef.id,
         ...appointmentData,
@@ -569,7 +572,6 @@ const HospitalDashboard = () => {
       };
 
       setAppointments(prev => [...prev, newAppointmentWithId]);
-      
       setFormSuccess('Appointment scheduled successfully!');
       
       setNewAppointment({
@@ -604,7 +606,6 @@ const HospitalDashboard = () => {
       [name]: value
     }));
     
-    // Auto-fill doctorId when doctor is selected
     if (name === 'doctorAssigned') {
       const selectedDoctor = doctors.find(d => d.name === value);
       if (selectedDoctor) {
@@ -631,7 +632,6 @@ const HospitalDashboard = () => {
       [name]: value
     }));
     
-    // Auto-fill IDs when patient or doctor is selected
     if (name === 'patientName') {
       const selectedPatient = patients.find(p => p.name === value);
       if (selectedPatient) {
@@ -653,9 +653,48 @@ const HospitalDashboard = () => {
     }
   };
 
+  const handleBedUpdate = (updatedBedData) => {
+    // Refresh beds list
+    const bedsRef = collection(db, 'hospitals', hospitalId, 'beds');
+    const unsubscribe = onSnapshot(bedsRef, (snapshot) => {
+      const beds = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setBedsList(beds);
+      
+      const transformedBedData = {};
+      beds.forEach(bed => {
+        if (!transformedBedData[bed.type]) {
+          transformedBedData[bed.type] = {
+            totalBeds: 0,
+            availableBeds: 0,
+            floors: {}
+          };
+        }
+        transformedBedData[bed.type].totalBeds++;
+        if (bed.status === 'available') {
+          transformedBedData[bed.type].availableBeds++;
+        }
+        
+        const floor = bed.floor || '1';
+        if (!transformedBedData[bed.type].floors[floor]) {
+          transformedBedData[bed.type].floors[floor] = { total: 0, available: 0 };
+        }
+        transformedBedData[bed.type].floors[floor].total++;
+        if (bed.status === 'available') {
+          transformedBedData[bed.type].floors[floor].available++;
+        }
+      });
+      
+      setBedData(transformedBedData);
+    });
+    
+    fetchBedRequests(hospitalId);
+  };
+
   const { total, available, occupied } = calculateBedStats();
 
-  // Logo Component for reuse
   const LogoComponent = ({ isFloating = false, isLarge = false, onError = null }) => {
     const width = isLarge ? '80px' : (isFloating ? '80px' : '60px');
     const height = isLarge ? '80px' : (isFloating ? '80px' : '60px');
@@ -700,26 +739,19 @@ const HospitalDashboard = () => {
               objectFit: 'cover'
             }}
             onError={handleImageError}
-            onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
-            onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
           />
         )}
       </div>
     );
   };
 
-  // Navigation items
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'patients', label: 'Patients', icon: '👥', badge: patients.length },
     { id: 'doctors', label: 'Doctors', icon: '👨‍⚕️', badge: doctors.length },
     { id: 'appointments', label: 'Appointments', icon: '📅', badge: appointments.length },
-    { id: 'beds', label: 'Bed Management', icon: '🛏️' },
-    { id: 'pharmacy', label: 'Pharmacy', icon: '💊' },
-    { id: 'lab', label: 'Lab Reports', icon: '🔬' },
-    { id: 'billing', label: 'Billing', icon: '💰' },
-    { id: 'staff', label: 'Staff', icon: '👨‍💼' },
-    { id: 'reports', label: 'Reports', icon: '📈' }
+    { id: 'bed-requests', label: 'Bed Requests', icon: '🤖', badge: bedRequests.filter(r => r.status === 'pending').length },
+    { id: 'beds', label: 'Bed Management', icon: '🛏️' }
   ];
 
   if (loading) {
@@ -749,7 +781,6 @@ const HospitalDashboard = () => {
 
   return (
     <div className="hospital-dashboard">
-      {/* Floating Background Elements */}
       <div className="floating-elements">
         <div className="floating-element">⚕️</div>
         <div className="floating-element">🩺</div>
@@ -759,7 +790,6 @@ const HospitalDashboard = () => {
       </div>
 
       <div className="dashboard-with-sidebar">
-        {/* Vertical Navbar */}
         <div className="dashboard-sidebar">
           <div className="sidebar-header" style={{ textAlign: 'center', marginBottom: '20px' }}>
             <LogoComponent />
@@ -795,9 +825,7 @@ const HospitalDashboard = () => {
           </div>
         </div>
 
-        {/* Main Content Area */}
         <div className="dashboard-main-content">
-          {/* Dashboard Header */}
           <header className="dashboard-header">
             <div className="header-content">
               <div className="header-logo" onClick={handleLogoClick}>
@@ -821,12 +849,9 @@ const HospitalDashboard = () => {
             </div>
           </header>
 
-          {/* Dynamic Content Based on Active Section */}
           <div className="section-content">
-            {/* Dashboard Section */}
             {activeSection === 'dashboard' && (
               <div>
-                {/* Statistics Cards */}
                 <div className="stats-cards">
                   <div className="stat-card">
                     <div className="stat-card-icon">🛏️</div>
@@ -858,7 +883,42 @@ const HospitalDashboard = () => {
                   </div>
                 </div>
 
-                {/* Action Section */}
+                {bedRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <div className="alert-card" style={{
+                    background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+                    borderRadius: '12px',
+                    padding: '15px',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '15px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.5rem' }}>🤖</span>
+                      <div>
+                        <strong style={{ color: '#92400e' }}>{bedRequests.filter(r => r.status === 'pending').length} Pending Bed Request(s)</strong>
+                        <p style={{ margin: '0', fontSize: '0.85rem', color: '#b45309' }}>AI recommendations available for allocation</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveSection('bed-requests')}
+                      style={{
+                        background: '#f59e0b',
+                        border: 'none',
+                        padding: '8px 20px',
+                        borderRadius: '8px',
+                        color: 'white',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      View Requests →
+                    </button>
+                  </div>
+                )}
+
                 <div className="action-section">
                   <button
                     className="edit-beds-btn"
@@ -896,21 +956,13 @@ const HospitalDashboard = () => {
                   </div>
                 </div>
 
-                {/* Hospital Details & Bed Categories */}
                 <div className="hospital-details-section">
-                  {/* Hospital Info Card */}
                   <div className="hospital-info-card">
                     <h2>🏥 Hospital Details</h2>
                     <div className="info-grid">
                       <div className="info-item">
                         <strong>Hospital ID</strong>
-                        <span
-                          style={{
-                            fontSize: "1.1em",
-                            fontWeight: "600",
-                            color: "#0d9488",
-                          }}
-                        >
+                        <span style={{ fontSize: "1.1em", fontWeight: "600", color: "#0d9488" }}>
                           {hospitalId}
                         </span>
                       </div>
@@ -926,16 +978,7 @@ const HospitalDashboard = () => {
                       </div>
                       <div className="info-item">
                         <strong>Status</strong>
-                        <span
-                          style={{
-                            color: "#10b981",
-                            fontWeight: "600",
-                            background: "#d1fae5",
-                            padding: "4px 12px",
-                            borderRadius: "12px",
-                            fontSize: "0.9em",
-                          }}
-                        >
+                        <span style={{ color: "#10b981", fontWeight: "600", background: "#d1fae5", padding: "4px 12px", borderRadius: "12px", fontSize: "0.9em" }}>
                           🟢 {hospitalData?.status || "Operational"}
                         </span>
                       </div>
@@ -968,7 +1011,6 @@ const HospitalDashboard = () => {
                     </div>
                   </div>
 
-                  {/* Bed Categories Card */}
                   <div className="bed-summary-card">
                     <div className="card-header">
                       <h2>
@@ -991,119 +1033,91 @@ const HospitalDashboard = () => {
                                 <th>Available</th>
                                 <th>Occupied</th>
                                 <th>Utilization</th>
-                                <th>Status</th>
+                                <th>Floor-wise Availability</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {Object.entries(bedData).map(
-                                ([category, data], index) => {
-                                  const totalBeds = data.totalBeds || 0;
-                                  const availableBeds = data.availableBeds || 0;
-                                  const occupiedBeds = totalBeds - availableBeds;
-                                  const utilization =
-                                    totalBeds > 0
-                                      ? (occupiedBeds / totalBeds) * 100
-                                      : 0;
-                                  const status = getStatusLabel(availableBeds);
+                              {Object.entries(bedData).map(([category, data]) => {
+                                const totalBeds = data.totalBeds || 0;
+                                const availableBeds = data.availableBeds || 0;
+                                const occupiedBeds = totalBeds - availableBeds;
+                                const utilization = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+                                const status = getStatusLabel(availableBeds);
 
-                                  return (
-                                    <tr key={category}>
-                                      <td>
-                                        <span
-                                          className="bed-category-icon"
-                                          style={{ "--delay": index }}
-                                        >
-                                          {getCategoryIcon(category)}
-                                        </span>
-                                        <span>{category}</span>
-                                      </td>
-                                      <td>
-                                        <span className="status-badge status-total">
-                                          {totalBeds}
-                                        </span>
-                                      </td>
-                                      <td>
-                                        <span className="status-badge status-available">
-                                          {availableBeds}
-                                        </span>
-                                      </td>
-                                      <td>
-                                        <span className="status-badge status-occupied">
-                                          {occupiedBeds}
-                                        </span>
-                                      </td>
-                                      <td>
+                                return (
+                                  <tr key={category}>
+                                    <td style={{ textAlign: 'left' }}>
+                                      <span className="bed-category-icon">
+                                        {getCategoryIcon(category)}
+                                      </span>
+                                      <span style={{ marginLeft: '8px' }}>{category}</span>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      <span className="status-badge status-total">
+                                        {totalBeds}
+                                      </span>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      <span className="status-badge status-available">
+                                        {availableBeds}
+                                      </span>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      <span className="status-badge status-occupied">
+                                        {occupiedBeds}
+                                      </span>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      <div style={{ fontWeight: "600", color: "#1e293b" }}>
+                                        {Math.round(utilization)}%
+                                      </div>
+                                      <div className="utilization-progress">
                                         <div
-                                          style={{
-                                            fontWeight: "600",
-                                            color: "#1e293b",
-                                          }}
-                                        >
-                                          {Math.round(utilization)}%
+                                          className={`utilization-fill ${getUtilizationColor(totalBeds, occupiedBeds)}`}
+                                          style={{ width: `${utilization}%` }}
+                                        />
+                                      </div>
+                                    </td>
+                                    <td>
+                                      {data.floors && Object.entries(data.floors).map(([floor, floorData]) => (
+                                        <div key={floor} style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                                          Floor {floor}: {floorData.available}/{floorData.total} available
                                         </div>
-                                        <div className="utilization-progress">
-                                          <div
-                                            className={`utilization-fill ${getUtilizationColor(totalBeds, occupiedBeds)}`}
-                                            style={{ width: `${utilization}%` }}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td>
-                                        <span
-                                          className="status-badge"
-                                          style={{
-                                            background: `${status.color}15`,
-                                            color: status.color,
-                                            border: `1px solid ${status.color}30`,
-                                          }}
-                                        >
-                                          {status.label}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  );
-                                },
-                              )}
+                                      ))}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
-                          </table>
+                           </table>
                         </div>
                       ) : (
                         <div className="bed-cards-view">
-                          {Object.entries(bedData).map(([category, data], index) => {
+                          {Object.entries(bedData).map(([category, data]) => {
                             const totalBeds = data.totalBeds || 0;
                             const availableBeds = data.availableBeds || 0;
                             const occupiedBeds = totalBeds - availableBeds;
-                            const utilization =
-                              totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+                            const utilization = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
                             const status = getStatusLabel(availableBeds);
 
                             return (
-                              <div
-                                key={category}
-                                className="bed-category-card"
-                                style={{ animationDelay: `${index * 0.1}s` }}
-                              >
+                              <div key={category} className="bed-category-card">
                                 <div className="bed-category-header">
                                   <h4>
-                                    <span
-                                      className="bed-category-icon"
-                                      style={{ "--delay": index }}
-                                    >
+                                    <span className="bed-category-icon">
                                       {getCategoryIcon(category)}
                                     </span>
                                     {category}
                                   </h4>
-                                  <span
-                                    style={{
-                                      fontSize: "0.85em",
-                                      padding: "6px 15px",
-                                      borderRadius: "15px",
-                                      background: `${status.color}15`,
-                                      color: status.color,
-                                      fontWeight: "600",
-                                      border: `1px solid ${status.color}30`,
-                                    }}
-                                  >
+                                  <span style={{
+                                    fontSize: "0.85em",
+                                    padding: "6px 15px",
+                                    borderRadius: "15px",
+                                    background: `${status.color}15`,
+                                    color: status.color,
+                                    fontWeight: "600",
+                                    border: `1px solid ${status.color}30`,
+                                  }}>
                                     {status.label} Availability
                                   </span>
                                 </div>
@@ -1129,32 +1143,28 @@ const HospitalDashboard = () => {
                                   </div>
                                 </div>
 
-                                <div
-                                  style={{
-                                    marginTop: "20px",
-                                    paddingTop: "15px",
-                                    borderTop: "1px solid #e2e8f0",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      marginBottom: "8px",
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        fontSize: "0.9em",
-                                        color: "#64748b",
-                                        fontWeight: "500",
-                                      }}
-                                    >
+                                {data.floors && (
+                                  <div style={{ marginTop: '15px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: '600', marginBottom: '8px', color: '#64748b' }}>
+                                      Floor-wise Availability:
+                                    </div>
+                                    {Object.entries(data.floors).map(([floor, floorData]) => (
+                                      <div key={floor} style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <span>Floor {floor}:</span>
+                                        <span style={{ fontWeight: '600', color: floorData.available > 0 ? '#10b981' : '#ef4444' }}>
+                                          {floorData.available}/{floorData.total} available
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div style={{ marginTop: "20px", paddingTop: "15px", borderTop: "1px solid #e2e8f0" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                                    <span style={{ fontSize: "0.9em", color: "#64748b", fontWeight: "500" }}>
                                       Utilization:
                                     </span>
-                                    <span
-                                      style={{ fontWeight: "700", color: "#1e293b" }}
-                                    >
+                                    <span style={{ fontWeight: "700", color: "#1e293b" }}>
                                       {Math.round(utilization)}%
                                     </span>
                                   </div>
@@ -1180,9 +1190,7 @@ const HospitalDashboard = () => {
                         </p>
                         <button
                           className="edit-beds-btn"
-                          onClick={() =>
-                            window.open(generateEncryptedBedUrl(), "_blank")
-                          }
+                          onClick={() => window.open(generateEncryptedBedUrl(), "_blank")}
                           style={{ padding: "15px 40px", fontSize: "16px" }}
                         >
                           <span>➕</span>
@@ -1195,7 +1203,33 @@ const HospitalDashboard = () => {
               </div>
             )}
 
-            {/* Patients Section */}
+            {activeSection === 'bed-requests' && (
+              <div>
+                <div className="section-header">
+                  <h2>
+                    <span>🤖</span>
+                    AI-Powered Bed Request Management
+                  </h2>
+                  <div className="section-actions">
+                    <button 
+                      className="edit-beds-btn"
+                      onClick={() => {
+                        fetchBedRequests(hospitalId);
+                      }}
+                    >
+                      <span>🔄</span>
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                </div>
+                <BedRequestManagement 
+                  hospitalId={hospitalId}
+                  bedData={bedData}
+                  onBedUpdate={handleBedUpdate}
+                />
+              </div>
+            )}
+
             {activeSection === 'patients' && (
               <div>
                 <div className="section-header">
@@ -1222,25 +1256,13 @@ const HospitalDashboard = () => {
                     <h3 style={{ marginBottom: '20px', color: '#0d9488' }}>Add New Patient</h3>
                     
                     {formError && (
-                      <div style={{ 
-                        background: '#fee2e2', 
-                        color: '#991b1b', 
-                        padding: '12px', 
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
+                      <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
                         {formError}
                       </div>
                     )}
                     
                     {formSuccess && (
-                      <div style={{ 
-                        background: '#d1fae5', 
-                        color: '#065f46', 
-                        padding: '12px', 
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
+                      <div style={{ background: '#d1fae5', color: '#065f46', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
                         {formSuccess}
                       </div>
                     )}
@@ -1345,6 +1367,24 @@ const HospitalDashboard = () => {
                         </select>
                       </div>
                       <div className="form-group">
+                        <label>Bed ID (Optional)</label>
+                        <select 
+                          name="bedId"
+                          value={newPatient.bedId}
+                          onChange={handlePatientInputChange}
+                          disabled={!newPatient.bedType}
+                        >
+                          <option value="">Select Specific Bed</option>
+                          {bedsList
+                            .filter(bed => bed.type === newPatient.bedType && bed.status === 'available')
+                            .map(bed => (
+                              <option key={bed.id} value={bed.id}>
+                                {bed.bedId} (Room {bed.roomNumber}, Floor {bed.floor})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
                         <label>Assign Doctor</label>
                         <select 
                           name="doctorAssigned"
@@ -1391,7 +1431,7 @@ const HospitalDashboard = () => {
                 )}
 
                 <div className="patients-grid">
-                  {patients.map((patient, index) => (
+                  {patients.map((patient) => (
                     <div key={patient.id} className="patient-card">
                       <div className="patient-header">
                         <div className="patient-avatar">
@@ -1420,8 +1460,8 @@ const HospitalDashboard = () => {
                           <span className="value">{patient.admissionDate}</span>
                         </div>
                         <div className="patient-detail-item">
-                          <span className="label">Bed Type</span>
-                          <span className="value" style={{ fontWeight: '600' }}>{patient.bedType}</span>
+                          <span className="label">Bed</span>
+                          <span className="value" style={{ fontWeight: '600' }}>{patient.bedNumber || patient.bedType}</span>
                         </div>
                         <div className="patient-detail-item full-width">
                           <span className="label">Doctor</span>
@@ -1443,7 +1483,6 @@ const HospitalDashboard = () => {
               </div>
             )}
 
-            {/* Doctors Section */}
             {activeSection === 'doctors' && (
               <div>
                 <div className="section-header">
@@ -1470,25 +1509,13 @@ const HospitalDashboard = () => {
                     <h3 style={{ marginBottom: '20px', color: '#0d9488' }}>Add New Doctor</h3>
                     
                     {formError && (
-                      <div style={{ 
-                        background: '#fee2e2', 
-                        color: '#991b1b', 
-                        padding: '12px', 
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
+                      <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
                         {formError}
                       </div>
                     )}
                     
                     {formSuccess && (
-                      <div style={{ 
-                        background: '#d1fae5', 
-                        color: '#065f46', 
-                        padding: '12px', 
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
+                      <div style={{ background: '#d1fae5', color: '#065f46', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
                         {formSuccess}
                       </div>
                     )}
@@ -1623,7 +1650,7 @@ const HospitalDashboard = () => {
                 )}
 
                 <div className="doctors-grid">
-                  {doctors.map((doctor, index) => (
+                  {doctors.map((doctor) => (
                     <div key={doctor.id} className="doctor-card">
                       <div className="doctor-avatar">
                         {doctor.name?.split(' ')[1]?.charAt(0) || doctor.name?.charAt(0) || 'D'}
@@ -1669,7 +1696,6 @@ const HospitalDashboard = () => {
               </div>
             )}
 
-            {/* Appointments Section */}
             {activeSection === 'appointments' && (
               <div>
                 <div className="section-header">
@@ -1696,25 +1722,13 @@ const HospitalDashboard = () => {
                     <h3 style={{ marginBottom: '20px', color: '#0d9488' }}>Schedule New Appointment</h3>
                     
                     {formError && (
-                      <div style={{ 
-                        background: '#fee2e2', 
-                        color: '#991b1b', 
-                        padding: '12px', 
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
+                      <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
                         {formError}
                       </div>
                     )}
                     
                     {formSuccess && (
-                      <div style={{ 
-                        background: '#d1fae5', 
-                        color: '#065f46', 
-                        padding: '12px', 
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                      }}>
+                      <div style={{ background: '#d1fae5', color: '#065f46', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
                         {formSuccess}
                       </div>
                     )}
@@ -1841,12 +1855,7 @@ const HospitalDashboard = () => {
                             <span style={{ fontWeight: '600', color: '#0d9488' }}>{appointment.time}</span>
                           </td>
                           <td>
-                            <span style={{ 
-                              padding: '4px 8px', 
-                              background: '#f0f9ff', 
-                              borderRadius: '12px',
-                              fontSize: '0.85rem'
-                            }}>
+                            <span style={{ padding: '4px 8px', background: '#f0f9ff', borderRadius: '12px', fontSize: '0.85rem' }}>
                               {appointment.type}
                             </span>
                           </td>
@@ -1867,26 +1876,28 @@ const HospitalDashboard = () => {
               </div>
             )}
 
-            {/* Other sections (placeholder) */}
-            {['beds', 'pharmacy', 'lab', 'billing', 'staff', 'reports'].includes(activeSection) && (
+            {activeSection === 'beds' && (
               <div className="empty-state" style={{ padding: '60px 20px' }}>
-                <div className="empty-state-icon" style={{ fontSize: '4rem' }}>
-                  {activeSection === 'beds' && '🛏️'}
-                  {activeSection === 'pharmacy' && '💊'}
-                  {activeSection === 'lab' && '🔬'}
-                  {activeSection === 'billing' && '💰'}
-                  {activeSection === 'staff' && '👨‍💼'}
-                  {activeSection === 'reports' && '📈'}
-                </div>
-                <h3>{activeSection.charAt(0).toUpperCase() + activeSection.slice(1)} Management</h3>
-                <p>This section is under development. Check back soon for updates!</p>
+                <div className="empty-state-icon" style={{ fontSize: '4rem' }}>🛏️</div>
+                <h3>Bed Management</h3>
+                <p>Click the button below to manage bed configurations</p>
                 <button 
                   className="edit-beds-btn" 
-                  onClick={() => setActiveSection('dashboard')}
+                  onClick={() => {
+                    const url = generateEncryptedBedUrl();
+                    if (url.startsWith("#")) {
+                      window.open(
+                        window.location.origin + window.location.pathname + url,
+                        "_blank",
+                      );
+                    } else {
+                      window.open(url, "_blank");
+                    }
+                  }}
                   style={{ marginTop: '20px' }}
                 >
-                  <span>🏠</span>
-                  <span>Back to Dashboard</span>
+                  <span>✏️</span>
+                  <span>Edit Beds</span>
                 </button>
               </div>
             )}
@@ -1894,7 +1905,6 @@ const HospitalDashboard = () => {
         </div>
       </div>
 
-      {/* Floating Logo */}
       <LogoComponent isFloating={true} />
     </div>
   );

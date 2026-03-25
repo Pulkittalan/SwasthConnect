@@ -1,362 +1,921 @@
-import React, { useState, useEffect } from 'react';
+// BedManagement.jsx - Updated with dynamic floors support
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebase';
 import { 
   doc, 
   updateDoc, 
-  getDoc
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+  orderBy,
+  onSnapshot,
+  deleteDoc,
+  writeBatch,
+  runTransaction,
+  limit
 } from 'firebase/firestore';
 import './BedManagement.css';
 
-// Import PNG images
-import availableBedImage from './not_available_bed-removebg-preview.png';
-import icuOccupiedImage from './bluebed-removebg-preview.png';
-import generalOccupiedImage from './gerybed-removebg-preview.png';
-import emergencyOccupiedImage from './redbed-removebg-preview.png';
-import surgicalOccupiedImage from './greenbed-removebg-preview.png';
+// Import bed images
+import availableBedImage from './available bed.png';
+import occupiedBedImage from './not_available_bed-removebg-preview (1).png';
+import icuBedImage from './greenbed-removebg-preview.png';
+import emergencyBedImage from './redbed-removebg-preview.png';
+import surgicalBedImage from './bluebed-removebg-preview.png';
+import generalBedImage from './gerybed-removebg-preview.png';
 
 const BedManagement = () => {
   const navigate = useNavigate();
   
   // States
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [totalBeds, setTotalBeds] = useState('');
-  const [availableBeds, setAvailableBeds] = useState('');
-  const [bedData, setBedData] = useState({});
+  const [beds, setBeds] = useState([]);
   const [hospitalName, setHospitalName] = useState('');
   const [hospitalId, setHospitalId] = useState('');
-  const [showBedSelection, setShowBedSelection] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [loading, setLoading] = useState(true);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [showDischargeModal, setShowDischargeModal] = useState(false);
+  const [showRelocateModal, setShowRelocateModal] = useState(false);
+  const [showCriteriaModal, setShowCriteriaModal] = useState(false);
+  const [showQueueModal, setShowQueueModal] = useState(false);
+  const [selectedBed, setSelectedBed] = useState(null);
+  const [targetBed, setTargetBed] = useState(null);
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   
-  // Bed images mapping
-  const bedImages = {
-    available: availableBedImage,
-    ICU: icuOccupiedImage,
-    'General Ward': generalOccupiedImage,
-    Emergency: emergencyOccupiedImage,
-    Surgical: surgicalOccupiedImage
-  };
+  // AI Allocation Criteria
+  const [allocationCriteria, setAllocationCriteria] = useState({
+    emergencyWeight: 50,
+    oxygenCritical: 85,
+    oxygenCriticalWeight: 40,
+    oxygenLow: 90,
+    oxygenLowWeight: 30,
+    oxygenModerate: 95,
+    oxygenModerateWeight: 10,
+    ageVeryOld: 70,
+    ageVeryOldWeight: 25,
+    ageOld: 60,
+    ageOldWeight: 15,
+    ageMiddle: 50,
+    ageMiddleWeight: 10,
+    ageChild: 5,
+    ageChildWeight: 20,
+    conditionCritical: 35,
+    conditionSevere: 20,
+    conditionModerate: 10,
+    criticalKeywords: ['heart', 'stroke', 'bleeding', 'sepsis', 'respiratory', 'failure'],
+    keywordWeight: 15,
+    bedTypeThresholds: {
+      ICU: 70,
+      Emergency: 50,
+      Surgical: 40
+    }
+  });
 
-  // Get logged-in hospital from localStorage
+  // AI States
+  const [aiPatientForm, setAiPatientForm] = useState({
+    name: '',
+    age: '',
+    condition: 'normal',
+    oxygenLevel: '95',
+    emergency: false,
+    diagnosis: '',
+    contactNumber: ''
+  });
+  const [showAiForm, setShowAiForm] = useState(false);
+  const [waitingQueue, setWaitingQueue] = useState([]);
+  const [autoAllocate, setAutoAllocate] = useState(true);
+  const [lastAllocationLog, setLastAllocationLog] = useState(null);
+  const [isAllocating, setIsAllocating] = useState(false);
+  
+  // Bulk bed creation with dynamic floors
+  const [bulkBedForm, setBulkBedForm] = useState({
+    roomStart: '',
+    roomEnd: '',
+    type: 'General Ward',
+    floor: '1',
+    bedsPerRoom: '2',
+    customFloor: ''
+  });
+  const [showBulkForm, setShowBulkForm] = useState(false);
+  const [floorOptions, setFloorOptions] = useState(['Ground', '1', '2', '3', '4', '5']);
+  const [showCustomFloorInput, setShowCustomFloorInput] = useState(false);
+  
+  // Track next available numbers by type and floor
+  const [nextNumbers, setNextNumbers] = useState({});
+
+  // Track processed patient IDs to prevent duplicates
+  const processedPatientIds = useRef(new Set());
+
+  // Real-time subscription to beds
   useEffect(() => {
-    const loadLoggedInHospital = async () => {
+    if (!hospitalId) return;
+    
+    const bedsRef = collection(db, 'hospitals', hospitalId, 'beds');
+    const unsubscribe = onSnapshot(bedsRef, (snapshot) => {
+      const bedsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setBeds(bedsList);
+      
+      // Calculate next available numbers by type and floor
+      const newNextNumbers = {};
+      
+      bedsList.forEach(bed => {
+        const type = bed.type;
+        const floor = bed.floor || '1';
+        const key = `${type}_${floor}`;
+        const match = bed.bedId?.match(/\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          if (!newNextNumbers[key] || num >= newNextNumbers[key]) {
+            newNextNumbers[key] = num + 1;
+          }
+        }
+      });
+      
+      setNextNumbers(newNextNumbers);
+      
+      // AUTO-ALLOCATE: When beds become available, allocate to waiting queue
+      if (autoAllocate && waitingQueue.length > 0 && !isAllocating) {
+        const availableBeds = bedsList.filter(bed => bed.status === 'available');
+        if (availableBeds.length > 0) {
+          autoAllocateFromQueue();
+        }
+      }
+    }, (error) => {
+      console.error('Error fetching beds:', error);
+    });
+    
+    return () => unsubscribe();
+  }, [hospitalId, waitingQueue.length, autoAllocate]);
+
+  // Load hospital data
+  useEffect(() => {
+    const loadHospital = async () => {
       try {
         setLoading(true);
-        
-        // Get hospital ID from localStorage (set during login)
         const loggedInHospitalId = localStorage.getItem('hospitalId');
-        const loggedInHospitalName = localStorage.getItem('hospitalName');
         
         if (!loggedInHospitalId) {
-          showNotification('No hospital session found. Please login again.', 'error');
-          setTimeout(() => {
-            navigate('/login');
-          }, 2000);
+          showNotification('No hospital session found', 'error');
+          setTimeout(() => navigate('/login'), 2000);
           return;
         }
         
-        console.log('Loading hospital data for ID:', loggedInHospitalId);
-        
-        // Load hospital data from Firebase
         const docRef = doc(db, 'hospitals', loggedInHospitalId);
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
           const data = docSnap.data();
-          
-          // Set hospital information
-          setHospitalName(data.name || loggedInHospitalName || '');
+          setHospitalName(data.name || 'Hospital');
           setHospitalId(loggedInHospitalId);
+          await loadWaitingQueue(loggedInHospitalId);
           
-          // Load bed data from the bedData field
-          const bedDataFromFirebase = data.bedData || {};
-          
-          // Ensure all categories exist in bedData
-          const defaultBedData = {
-            ICU: { totalBeds: 0, availableBeds: 0 },
-            'General Ward': { totalBeds: 0, availableBeds: 0 },
-            Emergency: { totalBeds: 0, availableBeds: 0 },
-            Surgical: { totalBeds: 0, availableBeds: 0 }
-          };
-          
-          // Merge existing data with default structure
-          const mergedBedData = {
-            ...defaultBedData,
-            ...bedDataFromFirebase
-          };
-          
-          setBedData(mergedBedData);
-          setIsEditing(true);
-          
-          if (initialLoad) {
-            showNotification(`Loaded ${data.name} bed data`, 'success');
-            setInitialLoad(false);
+          // Load floor options from existing beds
+          const bedsRef = collection(db, 'hospitals', loggedInHospitalId, 'beds');
+          const bedsSnapshot = await getDocs(bedsRef);
+          const existingFloors = new Set();
+          bedsSnapshot.docs.forEach(doc => {
+            const floor = doc.data().floor;
+            if (floor) existingFloors.add(floor);
+          });
+          if (existingFloors.size > 0) {
+            setFloorOptions([...existingFloors]);
           }
         } else {
-          showNotification('Hospital data not found in database', 'error');
+          showNotification('Hospital not found', 'error');
         }
       } catch (error) {
-        console.error('Error loading hospital data:', error);
+        console.error('Error loading hospital:', error);
         showNotification('Error loading hospital data', 'error');
       } finally {
         setLoading(false);
       }
     };
+    
+    loadHospital();
+  }, [navigate]);
 
-    loadLoggedInHospital();
-  }, [initialLoad, navigate]); // Empty dependency array - only run once on mount
+  // Load waiting queue with real-time listener
+  const loadWaitingQueue = useCallback(async (hospitalIdParam) => {
+    if (!hospitalIdParam) return;
+    
+    try {
+      const queueRef = collection(db, 'hospitals', hospitalIdParam, 'waitingQueue');
+      const q = query(queueRef, where('status', '==', 'waiting'), orderBy('priority', 'desc'), orderBy('createdAt', 'asc'));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const queue = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Deduplicate by patient name and contact
+        const uniqueQueue = [];
+        const seenKeys = new Set();
+        
+        queue.forEach(patient => {
+          const key = `${patient.name}_${patient.contactNumber || patient.age}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            uniqueQueue.push(patient);
+          }
+        });
+        
+        setWaitingQueue(uniqueQueue);
+      }, (error) => {
+        console.error('Error loading queue:', error);
+      });
+      
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('Error setting up queue listener:', error);
+      return null;
+    }
+  }, []);
 
-  // Show notification
-  const showNotification = (message, type = 'success') => {
+  // Calculate priority score
+  const calculatePriorityScore = useCallback((patient) => {
+    let score = 0;
+    const log = [];
+    
+    if (patient.emergency) {
+      score += allocationCriteria.emergencyWeight;
+      log.push(`Emergency: +${allocationCriteria.emergencyWeight}`);
+    }
+    
+    const oxygenLevel = parseInt(patient.oxygenLevel) || 95;
+    if (oxygenLevel < allocationCriteria.oxygenCritical) {
+      score += allocationCriteria.oxygenCriticalWeight;
+      log.push(`Oxygen < ${allocationCriteria.oxygenCritical}%: +${allocationCriteria.oxygenCriticalWeight}`);
+    } else if (oxygenLevel < allocationCriteria.oxygenLow) {
+      score += allocationCriteria.oxygenLowWeight;
+      log.push(`Oxygen < ${allocationCriteria.oxygenLow}%: +${allocationCriteria.oxygenLowWeight}`);
+    } else if (oxygenLevel < allocationCriteria.oxygenModerate) {
+      score += allocationCriteria.oxygenModerateWeight;
+      log.push(`Oxygen < ${allocationCriteria.oxygenModerate}%: +${allocationCriteria.oxygenModerateWeight}`);
+    }
+    
+    const age = parseInt(patient.age) || 0;
+    if (age > allocationCriteria.ageVeryOld) {
+      score += allocationCriteria.ageVeryOldWeight;
+      log.push(`Age > ${allocationCriteria.ageVeryOld}: +${allocationCriteria.ageVeryOldWeight}`);
+    } else if (age > allocationCriteria.ageOld) {
+      score += allocationCriteria.ageOldWeight;
+      log.push(`Age > ${allocationCriteria.ageOld}: +${allocationCriteria.ageOldWeight}`);
+    } else if (age > allocationCriteria.ageMiddle) {
+      score += allocationCriteria.ageMiddleWeight;
+      log.push(`Age > ${allocationCriteria.ageMiddle}: +${allocationCriteria.ageMiddleWeight}`);
+    } else if (age < allocationCriteria.ageChild && age > 0) {
+      score += allocationCriteria.ageChildWeight;
+      log.push(`Age < ${allocationCriteria.ageChild}: +${allocationCriteria.ageChildWeight}`);
+    }
+    
+    if (patient.condition === 'critical') {
+      score += allocationCriteria.conditionCritical;
+      log.push(`Critical condition: +${allocationCriteria.conditionCritical}`);
+    } else if (patient.condition === 'severe') {
+      score += allocationCriteria.conditionSevere;
+      log.push(`Severe condition: +${allocationCriteria.conditionSevere}`);
+    } else if (patient.condition === 'moderate') {
+      score += allocationCriteria.conditionModerate;
+      log.push(`Moderate condition: +${allocationCriteria.conditionModerate}`);
+    }
+    
+    const diagnosis = (patient.diagnosis || '').toLowerCase();
+    allocationCriteria.criticalKeywords.forEach(keyword => {
+      if (diagnosis.includes(keyword)) {
+        score += allocationCriteria.keywordWeight;
+        log.push(`Keyword "${keyword}": +${allocationCriteria.keywordWeight}`);
+      }
+    });
+    
+    const finalScore = Math.min(score, 100);
+    return { score: finalScore, log };
+  }, [allocationCriteria]);
+
+  // Determine bed type
+  const determineBedType = useCallback((priority) => {
+    if (priority >= allocationCriteria.bedTypeThresholds.ICU) {
+      return 'ICU';
+    } else if (priority >= allocationCriteria.bedTypeThresholds.Emergency) {
+      return 'Emergency';
+    } else if (priority >= allocationCriteria.bedTypeThresholds.Surgical) {
+      return 'Surgical';
+    }
+    return 'General Ward';
+  }, [allocationCriteria]);
+
+  // AI Bed Allocation
+  const aiAllocateBed = useCallback((patient) => {
+    const { score: priority, log: priorityLog } = calculatePriorityScore(patient);
+    const requiredType = determineBedType(priority);
+    
+    let availableBeds = beds.filter(bed => 
+      bed.status === 'available' && bed.type === requiredType
+    );
+    
+    if (availableBeds.length === 0 && requiredType === 'ICU') {
+      availableBeds = beds.filter(bed => 
+        bed.status === 'available' && ['Emergency', 'Surgical'].includes(bed.type)
+      );
+    } else if (availableBeds.length === 0) {
+      availableBeds = beds.filter(bed => bed.status === 'available');
+    }
+    
+    if (availableBeds.length === 0) {
+      return {
+        hasAvailable: false,
+        message: `No ${requiredType} beds available. Added to waiting queue.`,
+        priority,
+        priorityLog,
+        requiredType,
+        waitingQueuePosition: waitingQueue.length + 1
+      };
+    }
+    
+    const selectedBed = availableBeds.sort((a, b) => {
+      if (priority > 70) {
+        return parseInt(a.floor) - parseInt(b.floor);
+      }
+      return (b.features?.length || 0) - (a.features?.length || 0);
+    })[0];
+    
+    return {
+      hasAvailable: true,
+      bed: selectedBed,
+      priority,
+      priorityLog,
+      requiredType,
+      message: `AI recommends Bed ${selectedBed.bedId} (${selectedBed.type}) in Room ${selectedBed.roomNumber}, Floor ${selectedBed.floor}`,
+      reasoning: `Priority Score: ${priority} (${priorityLog.join(', ')}) → Recommended: ${selectedBed.type} Bed`
+    };
+  }, [beds, waitingQueue.length, calculatePriorityScore, determineBedType]);
+
+  // Allocate patient to bed
+  const allocatePatientToBed = useCallback(async (patient, bed) => {
+    const patientKey = `${patient.name}_${patient.contactNumber || patient.age}`;
+    if (processedPatientIds.current.has(patientKey)) {
+      console.log('Patient already processed:', patient.name);
+      return false;
+    }
+    
+    try {
+      const bedRef = doc(db, 'hospitals', hospitalId, 'beds', bed.id);
+      
+      // Create clean patient data object with no undefined values
+      const updateData = {
+        status: 'occupied',
+        patientId: `PAT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        patientName: patient.name || '',
+        patientAge: parseInt(patient.age) || 0,
+        patientCondition: patient.condition || 'normal',
+        admissionDate: serverTimestamp(),
+        priority: patient.priority || 0,
+        diagnosis: patient.diagnosis || '',
+        allocationReason: patient.allocationReason || 'AI Allocation'
+      };
+      
+      // Only add contactNumber if it exists and is not empty
+      if (patient.contactNumber && patient.contactNumber.trim() !== '') {
+        updateData.contactNumber = patient.contactNumber;
+      }
+      
+      // Only add oxygenLevel if it exists
+      if (patient.oxygenLevel) {
+        updateData.oxygenLevel = parseInt(patient.oxygenLevel) || 95;
+      }
+      
+      await runTransaction(db, async (transaction) => {
+        const bedDoc = await transaction.get(bedRef);
+        if (!bedDoc.exists()) {
+          throw new Error('Bed does not exist!');
+        }
+        
+        if (bedDoc.data().status !== 'available') {
+          throw new Error('Bed is no longer available!');
+        }
+        
+        transaction.update(bedRef, updateData);
+      });
+      
+      processedPatientIds.current.add(patientKey);
+      
+      // Save to patients collection with clean data
+      const patientData = {
+        name: patient.name || '',
+        age: parseInt(patient.age) || 0,
+        condition: patient.condition || 'normal',
+        oxygenLevel: parseInt(patient.oxygenLevel) || 95,
+        emergency: patient.emergency || false,
+        diagnosis: patient.diagnosis || '',
+        priority: patient.priority || 0,
+        priorityLog: patient.priorityLog || [],
+        bedId: bed.id,
+        bedNumber: bed.bedId,
+        bedType: bed.type,
+        roomNumber: bed.roomNumber,
+        floor: bed.floor,
+        admissionDate: serverTimestamp(),
+        status: 'admitted'
+      };
+      
+      // Only add contactNumber if available
+      if (patient.contactNumber && patient.contactNumber.trim() !== '') {
+        patientData.contactNumber = patient.contactNumber;
+      }
+      
+      const patientRef = collection(db, 'hospitals', hospitalId, 'patients');
+      await addDoc(patientRef, patientData);
+      
+      // Remove from waiting queue if exists
+      if (patient.id) {
+        await deleteDoc(doc(db, 'hospitals', hospitalId, 'waitingQueue', patient.id));
+      }
+      
+      return true;
+      
+    } catch (error) {
+      console.error('Error allocating bed:', error);
+      return false;
+    }
+  }, [hospitalId]);
+
+  // Auto-allocate from queue
+  const autoAllocateFromQueue = useCallback(async () => {
+    if (isAllocating) return;
+    if (waitingQueue.length === 0) return;
+    
+    setIsAllocating(true);
+    let allocatedCount = 0;
+    const allocatedPatients = [];
+    
+    try {
+      // Get current available beds
+      const availableBeds = beds.filter(bed => bed.status === 'available');
+      if (availableBeds.length === 0) {
+        setIsAllocating(false);
+        return;
+      }
+      
+      // Create a copy of waiting queue sorted by priority (already sorted)
+      const queueCopy = [...waitingQueue];
+      
+      // Try to allocate as many as possible
+      for (const patient of queueCopy) {
+        // Check if still in queue (not already allocated)
+        const stillInQueue = waitingQueue.some(p => p.id === patient.id);
+        if (!stillInQueue) continue;
+        
+        const allocation = aiAllocateBed(patient);
+        if (allocation.hasAvailable && allocation.bed) {
+          const success = await allocatePatientToBed(patient, allocation.bed);
+          if (success) {
+            allocatedCount++;
+            allocatedPatients.push(patient.name);
+            setLastAllocationLog({
+              patient: patient.name,
+              bed: allocation.bed.bedId,
+              priority: allocation.priority,
+              reasoning: allocation.reasoning,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      }
+      
+      if (allocatedCount > 0) {
+        showNotification(`🤖 Auto-allocated ${allocatedCount} patient(s): ${allocatedPatients.join(', ')}`, 'success');
+        // Reload queue to reflect changes
+        await loadWaitingQueue(hospitalId);
+      }
+      
+    } catch (error) {
+      console.error('Error in auto-allocation:', error);
+    } finally {
+      setIsAllocating(false);
+    }
+  }, [waitingQueue, beds, aiAllocateBed, allocatePatientToBed, hospitalId, loadWaitingQueue, isAllocating]);
+
+  // Handle AI admission
+  const handleAiAdmission = useCallback(async (e) => {
+    e.preventDefault();
+    
+    if (!aiPatientForm.name || !aiPatientForm.age) {
+      showNotification('Please fill patient name and age', 'error');
+      return;
+    }
+    
+    // Check for duplicate in waiting queue
+    const existingInQueue = waitingQueue.some(p => 
+      p.name === aiPatientForm.name && p.age === aiPatientForm.age
+    );
+    
+    if (existingInQueue) {
+      showNotification('Patient already in waiting queue!', 'warning');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const { score: priority, log: priorityLog } = calculatePriorityScore(aiPatientForm);
+      
+      // Create clean patient data with no undefined values
+      const patientData = {
+        name: aiPatientForm.name,
+        age: parseInt(aiPatientForm.age) || 0,
+        condition: aiPatientForm.condition || 'normal',
+        oxygenLevel: parseInt(aiPatientForm.oxygenLevel) || 95,
+        emergency: aiPatientForm.emergency || false,
+        diagnosis: aiPatientForm.diagnosis || '',
+        priority: priority,
+        priorityLog: priorityLog,
+        status: 'waiting',
+        createdAt: serverTimestamp(),
+        allocationReason: `Priority Score: ${priority} (${priorityLog.join(', ')})`
+      };
+      
+      // Only add contactNumber if provided
+      if (aiPatientForm.contactNumber && aiPatientForm.contactNumber.trim() !== '') {
+        patientData.contactNumber = aiPatientForm.contactNumber;
+      }
+      
+      const allocation = aiAllocateBed(patientData);
+      
+      if (allocation.hasAvailable && allocation.bed) {
+        patientData.allocationReason = allocation.reasoning;
+        const success = await allocatePatientToBed(patientData, allocation.bed);
+        
+        if (success) {
+          setLastAllocationLog({
+            patient: patientData.name,
+            bed: allocation.bed.bedId,
+            priority: allocation.priority,
+            reasoning: allocation.reasoning,
+            timestamp: new Date().toISOString()
+          });
+          
+          showNotification(`✅ Bed ${allocation.bed.bedId} allocated to ${patientData.name}!`, 'success');
+          
+          setAiPatientForm({
+            name: '',
+            age: '',
+            condition: 'normal',
+            oxygenLevel: '95',
+            emergency: false,
+            diagnosis: '',
+            contactNumber: ''
+          });
+          setShowAiForm(false);
+        } else {
+          showNotification('Failed to allocate bed. Please try again.', 'error');
+        }
+        
+      } else {
+        // Add to waiting queue
+        const queueRef = collection(db, 'hospitals', hospitalId, 'waitingQueue');
+        await addDoc(queueRef, {
+          ...patientData,
+          requiredType: allocation.requiredType,
+          priority: allocation.priority,
+          status: 'waiting',
+          createdAt: serverTimestamp()
+        });
+        
+        await loadWaitingQueue(hospitalId);
+        
+        showNotification(`⚠️ No beds available. ${patientData.name} added to waiting queue (Position: ${allocation.waitingQueuePosition})`, 'warning');
+      }
+      
+    } catch (error) {
+      console.error('Error in AI admission:', error);
+      showNotification('Error processing admission', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [aiPatientForm, hospitalId, calculatePriorityScore, aiAllocateBed, allocatePatientToBed, waitingQueue, loadWaitingQueue]);
+
+  // Bulk create beds with dynamic floors
+  const bulkCreateBeds = useCallback(async () => {
+    if (!bulkBedForm.roomStart || !bulkBedForm.roomEnd) {
+      showNotification('Please enter room range', 'warning');
+      return;
+    }
+    
+    const start = parseInt(bulkBedForm.roomStart);
+    const end = parseInt(bulkBedForm.roomEnd);
+    const bedsPerRoom = parseInt(bulkBedForm.bedsPerRoom) || 2;
+    
+    if (isNaN(start) || isNaN(end)) {
+      showNotification('Please enter valid room numbers', 'error');
+      return;
+    }
+    
+    if (start > end) {
+      showNotification('Start room must be less than end room', 'error');
+      return;
+    }
+    
+    const floorValue = bulkBedForm.customFloor && showCustomFloorInput ? bulkBedForm.customFloor : bulkBedForm.floor;
+    
+    setLoading(true);
+    const batch = writeBatch(db);
+    let created = 0;
+    const bedsToCreate = [];
+    
+    const typeKey = `${bulkBedForm.type}_${floorValue}`;
+    const currentCounter = nextNumbers[typeKey] || 1;
+    
+    try {
+      for (let room = start; room <= end; room++) {
+        for (let bedNum = 1; bedNum <= bedsPerRoom; bedNum++) {
+          const counter = currentCounter + created;
+          const prefix = bulkBedForm.type === 'ICU' ? 'ICU' : 
+                        bulkBedForm.type === 'Emergency' ? 'EMG' :
+                        bulkBedForm.type === 'Surgical' ? 'SUR' :
+                        bulkBedForm.type === 'General Ward' ? 'GEN' : 'PRV';
+          const formattedNumber = counter.toString().padStart(3, '0');
+          const bedId = `${prefix}${formattedNumber}`;
+          
+          bedsToCreate.push({
+            bedId: bedId,
+            type: bulkBedForm.type,
+            roomNumber: room.toString(),
+            floor: floorValue,
+            status: 'available',
+            features: [],
+            patientId: null,
+            patientName: null,
+            createdAt: serverTimestamp(),
+            bedNumber: bedNum
+          });
+          created++;
+        }
+      }
+      
+      for (const bedData of bedsToCreate) {
+        const bedsRef = collection(db, 'hospitals', hospitalId, 'beds');
+        const newBedRef = doc(bedsRef);
+        batch.set(newBedRef, bedData);
+      }
+      
+      await batch.commit();
+      
+      setNextNumbers(prev => ({
+        ...prev,
+        [typeKey]: currentCounter + created
+      }));
+      
+      showNotification(`✅ Successfully created ${created} beds on Floor ${floorValue}!`, 'success');
+      setShowBulkForm(false);
+      setBulkBedForm({
+        roomStart: '',
+        roomEnd: '',
+        type: 'General Ward',
+        floor: '1',
+        bedsPerRoom: '2',
+        customFloor: ''
+      });
+      setShowCustomFloorInput(false);
+      
+      // AUTO-ALLOCATE: After creating new beds, try to allocate from queue
+      if (autoAllocate && waitingQueue.length > 0) {
+        setTimeout(() => autoAllocateFromQueue(), 500);
+      }
+      
+    } catch (error) {
+      console.error('Error creating beds:', error);
+      showNotification('Error creating beds', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [bulkBedForm, hospitalId, nextNumbers, autoAllocate, waitingQueue, autoAllocateFromQueue, showCustomFloorInput]);
+
+  // Discharge patient
+  const dischargePatient = useCallback(async () => {
+    if (!selectedBed) return;
+    
+    try {
+      setLoading(true);
+      
+      const bedRef = doc(db, 'hospitals', hospitalId, 'beds', selectedBed.id);
+      await updateDoc(bedRef, {
+        status: 'available',
+        patientId: null,
+        patientName: null,
+        patientAge: null,
+        patientCondition: null,
+        dischargedAt: serverTimestamp()
+      });
+      
+      showNotification(`✅ Patient discharged from Bed ${selectedBed.bedId}.`, 'success');
+      setShowDischargeModal(false);
+      setSelectedBed(null);
+      
+      // AUTO-ALLOCATE: After discharge, try to allocate from queue
+      if (autoAllocate && waitingQueue.length > 0) {
+        setTimeout(() => autoAllocateFromQueue(), 100);
+      }
+      
+    } catch (error) {
+      console.error('Error discharging patient:', error);
+      showNotification('Error discharging patient', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedBed, hospitalId, autoAllocate, waitingQueue, autoAllocateFromQueue]);
+
+  // Relocate patient
+  const relocatePatient = useCallback(async () => {
+    if (!selectedBed || !targetBed) {
+      showNotification('Please select both beds', 'warning');
+      return;
+    }
+    
+    if (targetBed.status !== 'available') {
+      showNotification('Target bed is not available', 'error');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const sourceRef = doc(db, 'hospitals', hospitalId, 'beds', selectedBed.id);
+      const targetRef = doc(db, 'hospitals', hospitalId, 'beds', targetBed.id);
+      
+      await runTransaction(db, async (transaction) => {
+        const sourceDoc = await transaction.get(sourceRef);
+        const targetDoc = await transaction.get(targetRef);
+        
+        if (!sourceDoc.exists() || !targetDoc.exists()) {
+          throw new Error('Bed does not exist!');
+        }
+        
+        if (targetDoc.data().status !== 'available') {
+          throw new Error('Target bed is no longer available!');
+        }
+        
+        transaction.update(sourceRef, {
+          status: 'available',
+          patientId: null,
+          patientName: null,
+          patientAge: null,
+          patientCondition: null,
+          relocatedFrom: true
+        });
+        
+        transaction.update(targetRef, {
+          status: 'occupied',
+          patientId: selectedBed.patientId,
+          patientName: selectedBed.patientName,
+          patientAge: selectedBed.patientAge,
+          patientCondition: selectedBed.patientCondition,
+          relocatedAt: serverTimestamp(),
+          previousBed: selectedBed.bedId
+        });
+      });
+      
+      showNotification(`🔄 Patient relocated from Bed ${selectedBed.bedId} to Bed ${targetBed.bedId}`, 'success');
+      setShowRelocateModal(false);
+      setSelectedBed(null);
+      setTargetBed(null);
+      
+    } catch (error) {
+      console.error('Error relocating patient:', error);
+      showNotification('Error relocating patient', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedBed, targetBed, hospitalId]);
+
+  // Remove from queue manually
+  const removeFromQueue = useCallback(async (patientId) => {
+    if (window.confirm('Remove this patient from waiting queue?')) {
+      try {
+        await deleteDoc(doc(db, 'hospitals', hospitalId, 'waitingQueue', patientId));
+        showNotification('Patient removed from queue', 'success');
+        await loadWaitingQueue(hospitalId);
+      } catch (error) {
+        console.error('Error removing from queue:', error);
+        showNotification('Error removing patient', 'error');
+      }
+    }
+  }, [hospitalId, loadWaitingQueue]);
+
+  const showNotification = useCallback((message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => {
       setNotification({ show: false, message: '', type: '' });
     }, 3000);
-  };
+  }, []);
 
-  // Select category for bed configuration
-  const selectCategory = (category) => {
-    setSelectedCategory(category);
-    setShowBedSelection(true);
+  // Get bed image
+  const getBedImage = useCallback((bed) => {
+    if (bed.status === 'available') return availableBedImage;
     
-    // Load existing bed data if available
-    if (bedData[category]) {
-      setTotalBeds(bedData[category].totalBeds.toString());
-      setAvailableBeds(bedData[category].availableBeds.toString());
-    } else {
-      setTotalBeds('');
-      setAvailableBeds('');
+    switch(bed.type) {
+      case 'ICU': return icuBedImage;
+      case 'Emergency': return emergencyBedImage;
+      case 'Surgical': return surgicalBedImage;
+      case 'General Ward': return generalBedImage;
+      default: return occupiedBedImage;
     }
-  };
+  }, []);
 
-  // Update hospital bed data in Firebase
-  const updateHospitalBedData = async (updatedBedData) => {
-    try {
-      if (!hospitalId) {
-        showNotification('No hospital selected', 'error');
-        return false;
-      }
-
-      const hospitalRef = doc(db, 'hospitals', hospitalId);
-      
-      // Prepare update data
-      const updateData = {
-        bedData: updatedBedData,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      await updateDoc(hospitalRef, updateData);
-      return true;
-    } catch (error) {
-      console.error('Error updating bed data:', error);
-      return false;
-    }
-  };
-
-  // Submit bed data for a category
-  const submitBedData = async () => {
-    if (!hospitalName.trim()) {
-      showNotification('Hospital data not loaded properly!', 'warning');
-      return;
-    }
-
-    const total = parseInt(totalBeds) || 0;
-    const available = parseInt(availableBeds) || 0;
-
-    if (total <= 0) {
-      showNotification('Total beds must be greater than 0!', 'warning');
-      return;
-    }
-
-    if (available > total) {
-      showNotification('Available beds cannot be more than total beds!', 'warning');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      // Update local state
-      const newBedData = {
-        ...bedData,
-        [selectedCategory]: {
-          totalBeds: total,
-          availableBeds: available,
-          lastUpdated: new Date().toISOString()
-        }
-      };
-
-      setBedData(newBedData);
-      
-      // Update in Firebase
-      const success = await updateHospitalBedData(newBedData);
-      
-      if (success) {
-        showNotification(`✅ ${selectedCategory} beds saved successfully!`, 'success');
-      } else {
-        showNotification('Error saving bed data', 'error');
-      }
-      
-      // Reset form
-      setShowBedSelection(false);
-      setSelectedCategory('');
-      setTotalBeds('');
-      setAvailableBeds('');
-      
-    } catch (error) {
-      console.error('Error submitting bed data:', error);
-      showNotification('Error saving bed data', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Toggle bed status when clicked
-  const toggleBedStatus = async (category, bedIndex) => {
-    if (!hospitalId) {
-      showNotification('Hospital data not loaded!', 'warning');
-      return;
-    }
-
-    const categoryData = bedData[category];
-    if (!categoryData || categoryData.totalBeds === 0) {
-      showNotification(`No ${category} beds configured!`, 'warning');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      const newBedData = { ...bedData };
-      const newCategoryData = { ...categoryData };
-      
-      // Check if clicked bed is available or occupied
-      const currentAvailableCount = newCategoryData.availableBeds || 0;
-      const isAvailable = bedIndex < currentAvailableCount;
-      
-      let newAvailableCount;
-      if (isAvailable) {
-        // Change from available to occupied
-        newAvailableCount = Math.max(0, currentAvailableCount - 1);
-      } else {
-        // Change from occupied to available
-        newAvailableCount = Math.min(newCategoryData.totalBeds, currentAvailableCount + 1);
-      }
-      
-      newCategoryData.availableBeds = newAvailableCount;
-      newCategoryData.lastUpdated = new Date().toISOString();
-      
-      newBedData[category] = newCategoryData;
-      setBedData(newBedData);
-      
-      // Update in Firebase
-      const success = await updateHospitalBedData(newBedData);
-      
-      if (success) {
-        const bedNumber = bedIndex + 1;
-        if (isAvailable) {
-          showNotification(`🛏️ ${category} Bed #${bedNumber} marked as occupied`, 'info');
-        } else {
-          showNotification(`🛏️ ${category} Bed #${bedNumber} marked as available`, 'success');
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error toggling bed status:', error);
-      showNotification('Error updating bed status', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Show all beds (main rendering function)
-  const showAllBeds = () => {
-    const categories = ['ICU', 'General Ward', 'Emergency', 'Surgical'];
+  // Calculate statistics by type
+  const stats = useMemo(() => {
+    const total = beds.length;
+    const available = beds.filter(bed => bed.status === 'available').length;
+    const occupied = beds.filter(bed => bed.status === 'occupied').length;
     
-    // Check if we have any beds configured
-    const hasBeds = categories.some(category => {
-      const categoryData = bedData[category];
-      return categoryData && categoryData.totalBeds > 0;
-    });
-
-    if (!hasBeds) {
-      return (
-        <div className="no-beds">
-          <div className="empty-state-icon">🛏️</div>
-          <h3>No Beds Configured</h3>
-          <p>Configure beds by selecting a category on the right</p>
-        </div>
-      );
-    }
-
-    return categories.map(category => {
-      const categoryData = bedData[category];
-      if (!categoryData || categoryData.totalBeds === 0) return null;
-
-      const occupiedBeds = categoryData.totalBeds - (categoryData.availableBeds || 0);
-      const availableBeds = categoryData.availableBeds || 0;
-
-      return (
-        <React.Fragment key={category}>
-          <div className="category-title" id={`title-${category}`}>
-            <h2>{category} Beds</h2>
-            <div className="category-stats">
-              <span className="stat-total">Total: {categoryData.totalBeds}</span>
-              <span className="stat-available">Available: {availableBeds}</span>
-              <span className="stat-occupied">Occupied: {occupiedBeds}</span>
-            </div>
-          </div>
-          
-          <div className="beds-row">
-            {Array.from({ length: categoryData.totalBeds }).map((_, index) => {
-              const isAvailable = index < availableBeds;
-              return (
-                <div
-                  key={`${category}-${index}`}
-                  className={`bed ${isAvailable ? 'available' : 'occupied'}`}
-                  style={{
-                    backgroundImage: `url(${isAvailable ? bedImages.available : bedImages[category]})`
-                  }}
-                  data-status={isAvailable ? 'available' : 'occupied'}
-                  onClick={() => toggleBedStatus(category, index)}
-                  title={`${category} Bed ${index + 1} - ${isAvailable ? 'Available' : 'Occupied'}`}
-                >
-                  <div className="bed-number">{index + 1}</div>
-                  <div className="bed-status-indicator">
-                    {isAvailable ? '✓' : '✗'}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </React.Fragment>
-      );
-    });
-  };
-
-  // Calculate total statistics
-  const calculateStats = () => {
-    let total = 0;
-    let available = 0;
-    let occupied = 0;
-    
-    Object.values(bedData).forEach(category => {
-      total += category.totalBeds || 0;
-      available += category.availableBeds || 0;
-      occupied += (category.totalBeds - (category.availableBeds || 0)) || 0;
+    const byType = {};
+    beds.forEach(bed => {
+      if (!byType[bed.type]) {
+        byType[bed.type] = { total: 0, available: 0, occupied: 0, floors: {} };
+      }
+      byType[bed.type].total++;
+      if (bed.status === 'available') byType[bed.type].available++;
+      else byType[bed.type].occupied++;
+      
+      // Track floors
+      const floor = bed.floor || '1';
+      if (!byType[bed.type].floors[floor]) {
+        byType[bed.type].floors[floor] = { total: 0, available: 0, occupied: 0 };
+      }
+      byType[bed.type].floors[floor].total++;
+      if (bed.status === 'available') byType[bed.type].floors[floor].available++;
+      else byType[bed.type].floors[floor].occupied++;
     });
     
-    return { total, available, occupied };
-  };
+    return { total, available, occupied, byType };
+  }, [beds]);
 
-  const stats = calculateStats();
+  // Group beds by type and floor
+  const bedsByTypeAndFloor = useMemo(() => {
+    const grouped = {};
+    beds.forEach(bed => {
+      const type = bed.type;
+      const floor = bed.floor || '1';
+      if (!grouped[type]) grouped[type] = {};
+      if (!grouped[type][floor]) grouped[type][floor] = [];
+      grouped[type][floor].push(bed);
+    });
+    return grouped;
+  }, [beds]);
 
-  if (loading && initialLoad) {
+  const getBedTypeIcon = useCallback((type) => {
+    const icons = {
+      'ICU': '💙',
+      'Emergency': '🚨',
+      'Surgical': '💚',
+      'General Ward': '🛏️',
+      'Private Room': '🏠'
+    };
+    return icons[type] || '🛏️';
+  }, []);
+
+  const bedTypes = useMemo(() => ['ICU', 'Emergency', 'Surgical', 'General Ward', 'Private Room'], []);
+
+  // Get unique floors from beds
+  const uniqueFloors = useMemo(() => {
+    const floors = new Set();
+    beds.forEach(bed => {
+      if (bed.floor) floors.add(bed.floor);
+    });
+    return Array.from(floors).sort();
+  }, [beds]);
+
+  // Input handlers
+  const handlePatientInputChange = useCallback((e) => {
+    const { name, value, type, checked } = e.target;
+    setAiPatientForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  }, []);
+
+  const handleBulkInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setBulkBedForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    if (name === 'floor' && value === 'custom') {
+      setShowCustomFloorInput(true);
+    } else if (name === 'floor' && value !== 'custom') {
+      setShowCustomFloorInput(false);
+    }
+  }, []);
+
+  if (loading && !beds.length) {
     return (
-      <div className="loading-overlay" style={{background: 'rgba(255, 255, 255, 0.9)'}}>
+      <div className="loading-overlay">
         <div className="loading-spinner"></div>
         <p>Loading hospital bed data...</p>
       </div>
@@ -365,38 +924,753 @@ const BedManagement = () => {
 
   return (
     <div className="bed-management">
-      {/* Notification Component */}
+      {/* Notification */}
       {notification.show && (
-        <div className={`notification ${notification.type}`}>
+        <div className={`notification ${notification.type} show`}>
           <div className="notification-content">{notification.message}</div>
         </div>
       )}
 
       {/* Loading Overlay */}
-      {loading && !initialLoad && (
+      {loading && (
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
-          <p>Updating bed data...</p>
+          <p>Processing...</p>
         </div>
       )}
 
-      <button
-        className="edit-link"
-        onClick={() => navigate(`/dashboard/${hospitalId}`)}
-      >
+      <button className="edit-link" onClick={() => navigate(`/dashboard/${hospitalId}`)}>
         ← Back to Dashboard
       </button>
 
+      {/* AI Admission Modal */}
+      {showAiForm && (
+        <div className="modal-overlay" onClick={() => setShowAiForm(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🤖 AI Bed Allocation System</h2>
+              <button className="modal-close" onClick={() => setShowAiForm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleAiAdmission}>
+                <div className="form-grid">
+                  <div className="form-group full-width">
+                    <label>Patient Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={aiPatientForm.name}
+                      onChange={handlePatientInputChange}
+                      placeholder="Enter patient name"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Age *</label>
+                    <input
+                      type="number"
+                      name="age"
+                      value={aiPatientForm.age}
+                      onChange={handlePatientInputChange}
+                      placeholder="Enter age"
+                      required
+                      min="0"
+                      max="120"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Contact Number (Optional)</label>
+                    <input
+                      type="text"
+                      name="contactNumber"
+                      value={aiPatientForm.contactNumber}
+                      onChange={handlePatientInputChange}
+                      placeholder="Enter contact number"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Condition</label>
+                    <select
+                      name="condition"
+                      value={aiPatientForm.condition}
+                      onChange={handlePatientInputChange}
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="severe">Severe</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Oxygen Level (%)</label>
+                    <input
+                      type="number"
+                      name="oxygenLevel"
+                      value={aiPatientForm.oxygenLevel}
+                      onChange={handlePatientInputChange}
+                      min="0"
+                      max="100"
+                      step="1"
+                    />
+                  </div>
+                  
+                  <div className="form-group full-width">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="emergency"
+                        checked={aiPatientForm.emergency}
+                        onChange={handlePatientInputChange}
+                      />
+                      🚨 Emergency Case
+                    </label>
+                  </div>
+                  
+                  <div className="form-group full-width">
+                    <label>Diagnosis / Medical Condition</label>
+                    <textarea
+                      name="diagnosis"
+                      value={aiPatientForm.diagnosis}
+                      onChange={handlePatientInputChange}
+                      placeholder="e.g., Heart attack, Respiratory distress, Fracture..."
+                      rows="2"
+                    />
+                  </div>
+                </div>
+                
+                <div className="form-actions">
+                  <button type="button" className="cancel-btn" onClick={() => setShowAiForm(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="submit-btn" disabled={loading}>
+                    {loading ? 'Processing...' : '🤖 AI Allocate Bed'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Queue Modal */}
+      {showQueueModal && (
+        <div className="modal-overlay" onClick={() => setShowQueueModal(false)}>
+          <div className="modal-content queue-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px' }}>
+            <div className="modal-header">
+              <h2>⏳ Waiting Queue ({waitingQueue.length} patients)</h2>
+              <button className="modal-close" onClick={() => setShowQueueModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {waitingQueue.length === 0 ? (
+                <div className="empty-queue">
+                  <div className="empty-icon">✅</div>
+                  <p>No patients waiting in queue</p>
+                </div>
+              ) : (
+                <div className="full-queue-list">
+                  {waitingQueue.map((patient, idx) => (
+                    <div key={patient.id} className="queue-item-full">
+                      <div className="queue-rank">{idx + 1}</div>
+                      <div className="queue-details-full">
+                        <div className="queue-name-full">
+                          {patient.name}
+                          {patient.emergency && <span className="emergency-badge">🚨 EMERGENCY</span>}
+                        </div>
+                        <div className="queue-info-full">
+                          Age: {patient.age} yrs | Priority: {patient.priority}
+                          {patient.requiredType && <span> | Needs: {patient.requiredType}</span>}
+                          {patient.contactNumber && <span> | Contact: {patient.contactNumber}</span>}
+                        </div>
+                        <div className="queue-diagnosis">
+                          <strong>Diagnosis:</strong> {patient.diagnosis || 'Not specified'}
+                        </div>
+                        <div className="queue-priority-breakdown">
+                          <strong>Priority Breakdown:</strong> {patient.priorityLog?.join(', ') || 'Standard'}
+                        </div>
+                        <div className="queue-time">
+                          Added: {patient.createdAt?.toDate?.()?.toLocaleString() || 'Just now'}
+                        </div>
+                      </div>
+                      <button 
+                        className="remove-queue-btn"
+                        onClick={() => removeFromQueue(patient.id)}
+                        title="Remove from queue"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="form-actions">
+                <button className="cancel-btn" onClick={() => setShowQueueModal(false)}>Close</button>
+                {waitingQueue.length > 0 && (
+                  <button className="submit-btn" onClick={() => {
+                    autoAllocateFromQueue();
+                    setShowQueueModal(false);
+                  }}>
+                    🤖 Force Allocate Now
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Allocation Criteria Modal */}
+      {showCriteriaModal && (
+        <div className="modal-overlay" onClick={() => setShowCriteriaModal(false)}>
+          <div className="modal-content criteria-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px' }}>
+            <div className="modal-header">
+              <h2>⚙️ Configure AI Allocation Criteria</h2>
+              <button className="modal-close" onClick={() => setShowCriteriaModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="criteria-section">
+                <h3>🚨 Emergency Priority</h3>
+                <div className="criteria-input">
+                  <label>Emergency Weight:</label>
+                  <input
+                    type="number"
+                    value={allocationCriteria.emergencyWeight}
+                    onChange={(e) => setAllocationCriteria(prev => ({ ...prev, emergencyWeight: parseInt(e.target.value) || 0 }))}
+                    min="0"
+                    max="100"
+                  />
+                </div>
+              </div>
+
+              <div className="criteria-section">
+                <h3>💨 Oxygen Level Scoring</h3>
+                <div className="criteria-grid">
+                  <div>
+                    <label>Critical (&lt; {allocationCriteria.oxygenCritical}%):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.oxygenCriticalWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, oxygenCriticalWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Low (&lt; {allocationCriteria.oxygenLow}%):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.oxygenLowWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, oxygenLowWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Moderate (&lt; {allocationCriteria.oxygenModerate}%):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.oxygenModerateWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, oxygenModerateWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="criteria-section">
+                <h3>👤 Age-Based Scoring</h3>
+                <div className="criteria-grid">
+                  <div>
+                    <label>Very Old (&gt; {allocationCriteria.ageVeryOld}):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.ageVeryOldWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, ageVeryOldWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Old (&gt; {allocationCriteria.ageOld}):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.ageOldWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, ageOldWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Middle (&gt; {allocationCriteria.ageMiddle}):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.ageMiddleWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, ageMiddleWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Child (&lt; {allocationCriteria.ageChild}):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.ageChildWeight}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, ageChildWeight: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="criteria-section">
+                <h3>🏥 Condition Severity</h3>
+                <div className="criteria-grid">
+                  <div>
+                    <label>Critical:</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.conditionCritical}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, conditionCritical: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Severe:</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.conditionSevere}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, conditionSevere: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Moderate:</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.conditionModerate}
+                      onChange={(e) => setAllocationCriteria(prev => ({ ...prev, conditionModerate: parseInt(e.target.value) || 0 }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="criteria-section">
+                <h3>📊 Bed Type Thresholds</h3>
+                <div className="criteria-grid">
+                  <div>
+                    <label>ICU Threshold (priority ≥):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.bedTypeThresholds.ICU}
+                      onChange={(e) => setAllocationCriteria(prev => ({
+                        ...prev,
+                        bedTypeThresholds: { ...prev.bedTypeThresholds, ICU: parseInt(e.target.value) || 0 }
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Emergency Threshold (priority ≥):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.bedTypeThresholds.Emergency}
+                      onChange={(e) => setAllocationCriteria(prev => ({
+                        ...prev,
+                        bedTypeThresholds: { ...prev.bedTypeThresholds, Emergency: parseInt(e.target.value) || 0 }
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <label>Surgical Threshold (priority ≥):</label>
+                    <input
+                      type="number"
+                      value={allocationCriteria.bedTypeThresholds.Surgical}
+                      onChange={(e) => setAllocationCriteria(prev => ({
+                        ...prev,
+                        bedTypeThresholds: { ...prev.bedTypeThresholds, Surgical: parseInt(e.target.value) || 0 }
+                      }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button className="cancel-btn" onClick={() => setShowCriteriaModal(false)}>Cancel</button>
+                <button className="submit-btn" onClick={() => {
+                  setShowCriteriaModal(false);
+                  showNotification('Allocation criteria updated!', 'success');
+                }}>
+                  Save Criteria
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Create Beds Modal */}
+      {showBulkForm && (
+        <div className="modal-overlay" onClick={() => setShowBulkForm(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🏗️ Bulk Create Beds</h2>
+              <button className="modal-close" onClick={() => setShowBulkForm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="info-box" style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
+                <strong>Next available IDs by type and floor:</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px', marginTop: '8px' }}>
+                  {Object.entries(nextNumbers).slice(0, 10).map(([key, num]) => {
+                    const [type, floor] = key.split('_');
+                    const prefix = type === 'ICU' ? 'ICU' : 
+                                  type === 'Emergency' ? 'EMG' :
+                                  type === 'Surgical' ? 'SUR' :
+                                  type === 'General Ward' ? 'GEN' : 'PRV';
+                    return (
+                      <div key={key}>
+                        {type} (Floor {floor}): {prefix}{num.toString().padStart(3, '0')}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Room Range (Start)</label>
+                  <input
+                    type="number"
+                    name="roomStart"
+                    value={bulkBedForm.roomStart}
+                    onChange={handleBulkInputChange}
+                    placeholder="e.g., 101"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Room Range (End)</label>
+                  <input
+                    type="number"
+                    name="roomEnd"
+                    value={bulkBedForm.roomEnd}
+                    onChange={handleBulkInputChange}
+                    placeholder="e.g., 110"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Bed Type</label>
+                  <select
+                    name="type"
+                    value={bulkBedForm.type}
+                    onChange={handleBulkInputChange}
+                  >
+                    <option value="General Ward">General Ward</option>
+                    <option value="ICU">ICU</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Surgical">Surgical</option>
+                    <option value="Private Room">Private Room</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Floor</label>
+                  <select
+                    name="floor"
+                    value={bulkBedForm.floor}
+                    onChange={handleBulkInputChange}
+                  >
+                    {floorOptions.map(floor => (
+                      <option key={floor} value={floor}>{floor === 'Ground' ? 'Ground Floor' : `${floor}${floor === '1' ? 'st' : floor === '2' ? 'nd' : floor === '3' ? 'rd' : 'th'} Floor`}</option>
+                    ))}
+                    <option value="custom">+ Add Custom Floor</option>
+                  </select>
+                </div>
+                {showCustomFloorInput && (
+                  <div className="form-group">
+                    <label>Custom Floor Name</label>
+                    <input
+                      type="text"
+                      name="customFloor"
+                      value={bulkBedForm.customFloor}
+                      onChange={handleBulkInputChange}
+                      placeholder="e.g., Basement, Terrace, etc."
+                    />
+                  </div>
+                )}
+                <div className="form-group">
+                  <label>Beds per Room</label>
+                  <input
+                    type="number"
+                    name="bedsPerRoom"
+                    value={bulkBedForm.bedsPerRoom}
+                    onChange={handleBulkInputChange}
+                    min="1"
+                    max="4"
+                  />
+                </div>
+              </div>
+              
+              <div className="form-actions">
+                <button className="cancel-btn" onClick={() => setShowBulkForm(false)}>Cancel</button>
+                <button className="submit-btn" onClick={bulkCreateBeds}>
+                  Create Beds
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discharge Modal */}
+      {showDischargeModal && selectedBed && (
+        <div className="modal-overlay" onClick={() => setShowDischargeModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Discharge Patient</h2>
+              <button className="modal-close" onClick={() => setShowDischargeModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="discharge-confirm">
+                <div className="discharge-icon">🏥</div>
+                <h3>Discharge Patient?</h3>
+                <p><strong>Bed:</strong> {selectedBed.bedId}</p>
+                <p><strong>Room:</strong> {selectedBed.roomNumber}</p>
+                <p><strong>Floor:</strong> {selectedBed.floor}</p>
+                <p><strong>Patient:</strong> {selectedBed.patientName}</p>
+                <p className="warning-text">This will free up the bed for new patients.</p>
+              </div>
+              <div className="form-actions">
+                <button className="cancel-btn" onClick={() => setShowDischargeModal(false)}>Cancel</button>
+                <button className="submit-btn danger" onClick={dischargePatient}>
+                  Confirm Discharge
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Relocate Modal */}
+      {showRelocateModal && selectedBed && targetBed && (
+        <div className="modal-overlay" onClick={() => setShowRelocateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🔄 Relocate Patient</h2>
+              <button className="modal-close" onClick={() => setShowRelocateModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="relocate-info">
+                <div className="source-bed">
+                  <h3>Source Bed</h3>
+                  <p>Bed: {selectedBed.bedId}</p>
+                  <p>Room: {selectedBed.roomNumber}</p>
+                  <p>Floor: {selectedBed.floor}</p>
+                  <p>Patient: {selectedBed.patientName}</p>
+                </div>
+                <div className="arrow">→</div>
+                <div className="target-bed">
+                  <h3>Target Bed</h3>
+                  <p>Bed: {targetBed.bedId}</p>
+                  <p>Room: {targetBed.roomNumber}</p>
+                  <p>Floor: {targetBed.floor}</p>
+                  <p>Type: {targetBed.type}</p>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button className="cancel-btn" onClick={() => setShowRelocateModal(false)}>Cancel</button>
+                <button className="submit-btn" onClick={relocatePatient}>
+                  Confirm Relocation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container">
         {/* Left side - Beds display */}
-        <div className="beds-container" id="bedStatus">
-          {showAllBeds()}
+        <div className="beds-container">
+          {/* Action Buttons */}
+          <div className="action-buttons-container">
+            <button className="ai-quick-action" onClick={() => setShowAiForm(true)}>
+              <span>🤖</span>
+              <span>AI Smart Admission</span>
+            </button>
+            <button className="bulk-action" onClick={() => setShowBulkForm(true)}>
+              <span>🏗️</span>
+              <span>Bulk Create Beds</span>
+            </button>
+            <button className="queue-action" onClick={() => setShowQueueModal(true)} style={{
+              background: waitingQueue.length > 0 ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #64748b, #475569)',
+              color: 'white',
+              position: 'relative'
+            }}>
+              <span>⏳</span>
+              <span>Queue ({waitingQueue.length})</span>
+              {waitingQueue.length > 0 && (
+                <span className="queue-badge">{waitingQueue.length}</span>
+              )}
+            </button>
+            <button className="criteria-action" onClick={() => setShowCriteriaModal(true)} style={{
+              background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              color: 'white'
+            }}>
+              <span>⚙️</span>
+              <span>Configure</span>
+            </button>
+          </div>
+
+          {/* Auto-allocate Toggle */}
+          <div className="auto-allocate-toggle">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={autoAllocate}
+                onChange={(e) => setAutoAllocate(e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <span>Auto-allocate from queue when beds become available</span>
+            {autoAllocate && waitingQueue.length > 0 && (
+              <span className="auto-status">🤖 Auto-allocation active</span>
+            )}
+          </div>
+
+          {/* Last Allocation Log */}
+          {lastAllocationLog && (
+            <div className="allocation-log">
+              <div className="log-header">
+                <span>🤖</span>
+                <strong>Last Auto-Allocation</strong>
+                <span className="log-time">{new Date(lastAllocationLog.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div className="log-details">
+                {lastAllocationLog.patient} → Bed {lastAllocationLog.bed}
+              </div>
+              <div className="log-reasoning">
+                {lastAllocationLog.reasoning}
+              </div>
+            </div>
+          )}
+
+          {/* Bed Display - Grouped by Type then Floor */}
+          {bedTypes.map(bedType => {
+            const typeStats = stats.byType[bedType] || { total: 0, available: 0, occupied: 0 };
+            if (typeStats.total === 0) return null;
+            
+            const floorsForType = bedsByTypeAndFloor[bedType] || {};
+            const sortedFloors = Object.keys(floorsForType).sort();
+            
+            return (
+              <div key={bedType} className="bed-category">
+                <div className="category-title">
+                  <h2>
+                    {getBedTypeIcon(bedType)} {bedType} Beds
+                    <span className="availability-badge">
+                      {typeStats.available}/{typeStats.total} available
+                    </span>
+                  </h2>
+                  <div className="category-stats">
+                    <span className="stat-total">Total: {typeStats.total}</span>
+                    <span className="stat-available">Available: {typeStats.available}</span>
+                    <span className="stat-occupied">Occupied: {typeStats.occupied}</span>
+                    <div className="stat-progress">
+                      <div 
+                        className="progress-fill"
+                        style={{ width: `${(typeStats.occupied / typeStats.total) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                
+                {sortedFloors.map(floor => (
+                  <div key={`${bedType}-${floor}`} className="bed-floor-section">
+                    <div className="floor-header">
+                      <h3>🏢 Floor {floor}</h3>
+                      <span className="floor-stats">
+                        {floorsForType[floor].filter(b => b.status === 'available').length} / {floorsForType[floor].length} available
+                      </span>
+                    </div>
+                    <div className="beds-grid">
+                      {floorsForType[floor].map((bed) => (
+                        <div
+                          key={bed.id}
+                          className={`bed-card ${bed.status === 'available' ? 'available' : 'occupied'}`}
+                          onClick={() => {
+                            if (bed.status === 'occupied') {
+                              setSelectedBed(bed);
+                              setShowDischargeModal(true);
+                            }
+                          }}
+                        >
+                          <div className="bed-image-container">
+                            <img 
+                              src={getBedImage(bed)} 
+                              alt={`Bed ${bed.bedId}`}
+                              className="bed-image"
+                            />
+                            <div className="bed-status-badge">
+                              {bed.status === 'available' ? '🟢 Available' : '🔴 Occupied'}
+                            </div>
+                          </div>
+                          <div className="bed-info">
+                            <div className="bed-id">{bed.bedId}</div>
+                            <div className="bed-room">Room {bed.roomNumber}</div>
+                            <div className="bed-floor">Floor {bed.floor}</div>
+                            {bed.status === 'occupied' && bed.patientName && (
+                              <div className="patient-info">
+                                <div className="patient-name">{bed.patientName}</div>
+                                <div className="patient-age">{bed.patientAge}yrs</div>
+                                {bed.priority && (
+                                  <div className="patient-priority">Priority: {bed.priority}</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {bed.status === 'occupied' && (
+                            <div className="bed-actions">
+                              <button 
+                                className="relocate-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBed(bed);
+                                  const availableBeds = beds.filter(b => b.status === 'available' && b.id !== bed.id);
+                                  if (availableBeds.length > 0) {
+                                    setTargetBed(availableBeds[0]);
+                                    setShowRelocateModal(true);
+                                  } else {
+                                    showNotification('No available beds for relocation', 'warning');
+                                  }
+                                }}
+                                title="Relocate Patient"
+                              >
+                                🔄
+                              </button>
+                              <button 
+                                className="discharge-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBed(bed);
+                                  setShowDischargeModal(true);
+                                }}
+                                title="Discharge Patient"
+                              >
+                                🚪
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          
+          {beds.length === 0 && (
+            <div className="no-beds">
+              <div className="empty-state-icon">🛏️</div>
+              <h3>No Beds Configured</h3>
+              <p>Click "Bulk Create Beds" to start configuring beds</p>
+              <button className="submit-btn" onClick={() => setShowBulkForm(true)}>
+                Create First Beds
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right side - Controls */}
         <div className="filter-box">
           <div className="filter-header">
-            <h2>🏥 Hospital Bed Management</h2>
+            <h2>🏥 {hospitalName}</h2>
             <div className="overall-stats">
               <div className="overall-stat">
                 <span className="stat-label">Total Beds</span>
@@ -404,249 +1678,153 @@ const BedManagement = () => {
               </div>
               <div className="overall-stat">
                 <span className="stat-label">Available</span>
-                <span className="stat-value available-stat">
-                  {stats.available}
-                </span>
+                <span className="stat-value available">{stats.available}</span>
               </div>
               <div className="overall-stat">
                 <span className="stat-label">Occupied</span>
-                <span className="stat-value occupied-stat">
-                  {stats.occupied}
+                <span className="stat-value occupied">{stats.occupied}</span>
+              </div>
+              <div className="overall-stat">
+                <span className="stat-label">Utilization</span>
+                <span className="stat-value">
+                  {stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0}%
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Hospital Info - Display only, no selection */}
-          <div className="hospital-info-card">
-            <h3>
-              <span className="section-icon">🏥</span>
-              Current Hospital
-            </h3>
-            <div className="hospital-details">
-              <p>
-                <strong>Name:</strong> {hospitalName}
-              </p>
-              <p>
-                <strong>Hospital ID:</strong> {hospitalId}
-              </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                <span style={{ color: "#28a745", fontWeight: "bold" }}>
-                  Active
-                </span>
-              </p>
-            </div>
-          </div>
-
-          <div className="category-section">
-            <h3>
-              <span className="section-icon">📋</span>
-              Configure Beds by Category
-            </h3>
-            <p className="section-description">
-              Select a category to configure or update bed counts
-            </p>
-            <div className="category-buttons">
-              {["ICU", "General Ward", "Emergency", "Surgical"].map(
-                (category) => (
-                  <button
-                    key={category}
-                    onClick={() => selectCategory(category)}
-                    className={`category-btn ${selectedCategory === category ? "active" : ""}`}
-                    disabled={loading}
-                  >
-                    <span className="btn-icon">
-                      {category === "ICU"
-                        ? "💙"
-                        : category === "General Ward"
-                          ? "🩺"
-                          : category === "Emergency"
-                            ? "🚨"
-                            : "💚"}
-                    </span>
-                    {category}
-                    {bedData[category]?.totalBeds > 0 && (
-                      <span className="bed-count-badge">
-                        {bedData[category].totalBeds}
-                      </span>
-                    )}
-                  </button>
-                ),
-              )}
-            </div>
-          </div>
-
-          {showBedSelection && (
-            <div className="bed-configuration">
-              <div className="config-header">
-                <h3>
-                  <span className="section-icon">⚙️</span>
-                  Configure {selectedCategory} Beds
-                </h3>
-                {bedData[selectedCategory]?.lastUpdated && (
-                  <p className="last-updated">
-                    Last updated:{" "}
-                    {new Date(
-                      bedData[selectedCategory].lastUpdated,
-                    ).toLocaleString()}
-                  </p>
-                )}
-              </div>
-
-              <div className="config-inputs">
-                <div className="input-group">
-                  <label htmlFor="totalBeds">
-                    <span className="label-icon">🛏️</span>
-                    Total Beds
-                  </label>
-                  <input
-                    id="totalBeds"
-                    type="number"
-                    value={totalBeds}
-                    onChange={(e) => setTotalBeds(e.target.value)}
-                    min="0"
-                    className="config-input"
-                    disabled={loading}
-                  />
-                  <div className="input-hint">
-                    Total number of {selectedCategory} beds in the hospital
-                  </div>
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="availableBeds">
-                    <span className="label-icon">✅</span>
-                    Available Beds
-                  </label>
-                  <input
-                    id="availableBeds"
-                    type="number"
-                    value={availableBeds}
-                    onChange={(e) => setAvailableBeds(e.target.value)}
-                    min="0"
-                    max={totalBeds}
-                    className="config-input"
-                    disabled={loading}
-                  />
-                  <div className="input-hint">
-                    Currently available beds (cannot exceed total beds)
-                  </div>
-                </div>
-
-                {totalBeds && availableBeds && (
-                  <div className="bed-preview">
-                    <div className="preview-stats">
-                      <span className="preview-stat">
-                        <span className="preview-label">Will be occupied:</span>
-                        <span className="preview-value">
-                          {totalBeds - availableBeds}
-                        </span>
-                      </span>
+          {/* Floor Summary */}
+          {uniqueFloors.length > 0 && (
+            <div className="floor-summary" style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px' }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>🏢 Floor Summary</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
+                {uniqueFloors.map(floor => {
+                  const bedsOnFloor = beds.filter(b => b.floor === floor);
+                  const availableOnFloor = bedsOnFloor.filter(b => b.status === 'available').length;
+                  const totalOnFloor = bedsOnFloor.length;
+                  return (
+                    <div key={floor} style={{ background: 'white', padding: '8px 12px', borderRadius: '8px' }}>
+                      <strong>Floor {floor}</strong>
+                      <div>{availableOnFloor}/{totalOnFloor} beds available</div>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="action-buttons">
-                <button
-                  onClick={() => {
-                    setShowBedSelection(false);
-                    setSelectedCategory("");
-                  }}
-                  className="cancel-btn"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={submitBedData}
-                  className="submit-btn"
-                  disabled={!hospitalName.trim() || !totalBeds || loading}
-                >
-                  {loading ? (
-                    <>
-                      <span className="loading-btn-spinner"></span>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <span className="btn-icon">💾</span>
-                      Save Configuration
-                    </>
-                  )}
-                </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {isEditing && stats.total > 0 && (
+          {/* Quick Queue Summary */}
+          {waitingQueue.length > 0 && (
+            <div className="queue-summary" onClick={() => setShowQueueModal(true)} style={{
+              background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+              borderRadius: '12px',
+              padding: '15px',
+              marginBottom: '20px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '14px' }}>⏳ Waiting Queue</h3>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#92400e' }}>
+                    {waitingQueue.length} patient(s)
+                  </div>
+                </div>
+                <div style={{ fontSize: '32px' }}>👥</div>
+              </div>
+              <div style={{ marginTop: '10px', fontSize: '12px', color: '#b45309' }}>
+                Highest priority: {waitingQueue[0]?.name} (Score: {waitingQueue[0]?.priority})
+              </div>
+              <div style={{ fontSize: '11px', marginTop: '8px', color: '#92400e' }}>
+                Click to view full queue
+              </div>
+            </div>
+          )}
+
+          {/* AI Status */}
+          <div className="ai-status">
+            <h3>🤖 AI System Status</h3>
+            <div className="status-items">
+              <div className="status-item">
+                <span className={`status-dot ${autoAllocate ? 'active' : ''}`}></span>
+                <span>Auto-Allocation: {autoAllocate ? 'Active' : 'Inactive'}</span>
+              </div>
+              <div className="status-item">
+                <span className="status-dot active"></span>
+                <span>Queue Monitoring: Active</span>
+              </div>
+              <div className="status-item">
+                <span className="status-dot active"></span>
+                <span>Real-time Sync: Active</span>
+              </div>
+              {isAllocating && (
+                <div className="status-item">
+                  <span className="status-dot"></span>
+                  <span>Allocating in progress...</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="quick-actions">
+            <h3>⚡ Quick Actions</h3>
+            <button onClick={() => setShowAiForm(true)} className="quick-action-btn">
+              <span>🤖</span> New Admission
+            </button>
+            <button onClick={() => setShowBulkForm(true)} className="quick-action-btn">
+              <span>🏗️</span> Bulk Create Beds
+            </button>
+            {waitingQueue.length > 0 && (
+              <button onClick={() => autoAllocateFromQueue()} className="quick-action-btn" style={{ background: '#10b981', color: 'white' }}>
+                <span>⚡</span> Force Allocate Now
+              </button>
+            )}
+            <button onClick={() => setShowQueueModal(true)} className="quick-action-btn">
+              <span>👥</span> View Full Queue ({waitingQueue.length})
+            </button>
+          </div>
+
+          {/* Bed Type Statistics */}
+          {stats.total > 0 && (
             <div className="current-stats">
-              <h3>
-                <span className="section-icon">📊</span>
-                Current Bed Statistics
-              </h3>
+              <h3>📊 Statistics by Type</h3>
               <div className="stats-grid">
-                {["ICU", "General Ward", "Emergency", "Surgical"].map(
-                  (category) => {
-                    const data = bedData[category];
-                    if (!data || data.totalBeds === 0) return null;
-
-                    const available = data.availableBeds || 0;
-                    const occupied = data.totalBeds - available;
-
-                    return (
-                      <div key={category} className="stat-card">
-                        <div className="stat-card-header">
-                          <span className="category-icon">
-                            {category === "ICU"
-                              ? "💙"
-                              : category === "General Ward"
-                                ? "🩺"
-                                : category === "Emergency"
-                                  ? "🚨"
-                                  : "💚"}
-                          </span>
-                          <span className="category-name">{category}</span>
-                        </div>
-                        <div className="stat-card-body">
-                          <div className="stat-item">
-                            <span>Total</span>
-                            <span className="stat-value">{data.totalBeds}</span>
-                          </div>
-                          <div className="stat-item">
-                            <span>Available</span>
-                            <span className="stat-value available">
-                              {available}
-                            </span>
-                          </div>
-                          <div className="stat-item">
-                            <span>Occupied</span>
-                            <span className="stat-value occupied">
-                              {occupied}
-                            </span>
-                          </div>
-                          <div className="occupancy-rate">
-                            <div className="occupancy-bar">
-                              <div
-                                className="occupancy-fill"
-                                style={{
-                                  width: `${(occupied / data.totalBeds) * 100}%`,
-                                  backgroundColor:
-                                    occupied > 0 ? "#ef4444" : "#10b981",
-                                }}
-                              ></div>
-                            </div>
-                            <span className="occupancy-text">
-                              {Math.round((occupied / data.totalBeds) * 100)}%
-                              Occupied
-                            </span>
-                          </div>
-                        </div>
+                {Object.entries(stats.byType).map(([type, data]) => (
+                  <div key={type} className="stat-card">
+                    <div className="stat-card-header">
+                      <span className="category-icon">{getBedTypeIcon(type)}</span>
+                      <span className="category-name">{type}</span>
+                    </div>
+                    <div className="stat-card-body">
+                      <div className="stat-item">
+                        <span>Total</span>
+                        <span className="stat-value">{data.total}</span>
                       </div>
-                    );
-                  },
-                )}
+                      <div className="stat-item">
+                        <span>Available</span>
+                        <span className="stat-value available">{data.available}</span>
+                      </div>
+                      <div className="stat-item">
+                        <span>Occupied</span>
+                        <span className="stat-value occupied">{data.occupied}</span>
+                      </div>
+                      <div className="occupancy-rate">
+                        <div className="occupancy-bar">
+                          <div
+                            className="occupancy-fill"
+                            style={{
+                              width: `${data.total > 0 ? (data.occupied / data.total) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="occupancy-text">
+                          {data.total > 0 ? Math.round((data.occupied / data.total) * 100) : 0}% Occupied
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
