@@ -1,7 +1,7 @@
 {
   "files": {
-    "main.css": "/static/css/main.a438c853.css",
-    "main.js": "/static/js/main.cb5dfde7.js",
+    "main.css": "/static/css/main.aeba2ac5.css",
+    "main.js": "/static/js/main.785b5cdb.js",
     "static/js/239.daf2e2c2.chunk.js": "/static/js/239.daf2e2c2.chunk.js",
     "static/js/977.e24e3b64.chunk.js": "/static/js/977.e24e3b64.chunk.js",
     "static/js/455.ed60277a.chunk.js": "/static/js/455.ed60277a.chunk.js",
@@ -14,14 +14,14 @@
     "static/media/gerybed-removebg-preview.png": "/static/media/gerybed-removebg-preview.e02e13a8a884b006e7f9.png",
     "static/media/not_available_bed-removebg-preview (1).png": "/static/media/not_available_bed-removebg-preview (1).444d0668bd76f56b31ae.png",
     "index.html": "/index.html",
-    "main.a438c853.css.map": "/static/css/main.a438c853.css.map",
-    "main.cb5dfde7.js.map": "/static/js/main.cb5dfde7.js.map",
+    "main.aeba2ac5.css.map": "/static/css/main.aeba2ac5.css.map",
+    "main.785b5cdb.js.map": "/static/js/main.785b5cdb.js.map",
     "239.daf2e2c2.chunk.js.map": "/static/js/239.daf2e2c2.chunk.js.map",
     "977.e24e3b64.chunk.js.map": "/static/js/977.e24e3b64.chunk.js.map",
     "455.ed60277a.chunk.js.map": "/static/js/455.ed60277a.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.a438c853.css",
-    "static/js/main.cb5dfde7.js"
+    "static/css/main.aeba2ac5.css",
+    "static/js/main.785b5cdb.js"
   ]
 }
