@@ -35,7 +35,7 @@ function App() {
           />
           {/* Add Doctor Dashboard Route */}
           <Route
-            path="/doctor-dashboard"
+            path="/hospital-doctor-dashboard"
             element={
               <ProtectedRoute>
                 <DoctorDashboard />
