@@ -11,7 +11,6 @@ import Telemedicine from './pages/Telemedicine/Telemedicine'
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminProtectedRoute from './components/AdminProtectedRoute';
 import AdminLogin from './pages/admin/AdminLogin';
-import DoctorDashboard from './pages/doctor_dashboard/DoctorDashboard';
 import Unauthorized from './pages/Unauthorized';
 import HospitalProtectedRoute from './components/HospitalProtectedRoute';
 // Add these imports at the top
@@ -35,14 +34,7 @@ function App() {
             }
           />
           {/* Add Doctor Dashboard Route */}
-          <Route
-            path="/doctor-dashboard"
-            element={
-              <ProtectedRoute>
-                <DoctorDashboard />
-              </ProtectedRoute>
-            }
-          />
+          
 
           <Route
             path="/hospital-doctor-dashboard"

@@ -472,7 +472,7 @@ const Login = () => {
       localStorage.setItem("hospitalLogo", hospitalData.logo_url || "/images/default-avatar.png");
 
       alert("✅ Hospital login successful!");
-      navigate(`#/dashboard/${formData.hospitalId}`);
+      navigate(`/#/dashboard/${formData.hospitalId}`);
     } catch (error) {
       console.error("Login error:", error);
       setError(error.message);
