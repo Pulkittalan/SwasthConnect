@@ -146,6 +146,7 @@
 }
 
 .nav-btn {
+  color: black;
   padding: 15px;
   border: none;
   background: transparent;
@@ -160,7 +161,7 @@
 }
 
 .nav-btn:hover {
-  background: #f0f7ff;
+  background: #6da5e5;
 }
 
 .nav-btn.active {
@@ -735,4 +736,191 @@
     gap: 15px;
     text-align: center;
   }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  position: relative;
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 1200px;
+  height: 80vh;
+  overflow: hidden;
+}
+
+.video-call-modal {
+  width: 90%;
+  height: 85vh;
+}
+
+.chat-modal {
+  width: 400px;
+  height: 600px;
+  max-width: 90%;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  z-index: 10;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Appointment Actions */
+.appointment-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.video-call-btn, .chat-btn {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.video-call-btn {
+  background: #e74c3c;
+  color: white;
+}
+
+.video-call-btn:hover {
+  background: #c0392b;
+}
+
+.chat-btn {
+  background: #3498db;
+  color: white;
+}
+
+.chat-btn:hover {
+  background: #2980b9;
+}
+
+/* Unread Badges */
+.unread-badge {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.unread-count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.unread-count-small {
+  margin-left: 5px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+/* Consultation Communication */
+.consultation-communication {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 30px;
+  flex-wrap: wrap;
+}
+
+.action-btn.video-call {
+  background: #e74c3c;
+  color: white;
+  border: none;
+}
+
+.action-btn.video-call:hover {
+  background: #c0392b;
+}
+
+.action-btn.chat {
+  background: #3498db;
+  color: white;
+  border: none;
+}
+
+.action-btn.chat:hover {
+  background: #2980b9;
+}
+
+/* Chat Action in Patients Table */
+.chat-action {
+  margin-left: 10px;
+  background: #3498db;
+  color: white;
+}
+
+.chat-action:hover {
+  background: #2980b9;
+}
+
+/* Header Right Position */
+.header-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }

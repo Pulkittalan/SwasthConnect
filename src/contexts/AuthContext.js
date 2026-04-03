@@ -1,21 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { auth, db } from '../firebase/firebase';
+import { auth, db, storage } from '../firebase/firebase';
 import { 
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const AuthContext = createContext();
 
 export function useAuth() {
   return useContext(AuthContext);
 }
-
-
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -42,6 +42,114 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;
+    }
+  };
+
+  // Hospital Registration
+  const hospitalRegister = async (formData) => {
+    try {
+      let logoUrl = '';
+      
+      // Upload logo if selected
+      if (formData.hospitalLogo) {
+        const logoRef = ref(storage, `hospitals/${formData.newHospitalId}/logo`);
+        await uploadBytes(logoRef, formData.hospitalLogo);
+        logoUrl = await getDownloadURL(logoRef);
+      }
+      
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.newHospitalEmail,
+        formData.newHospitalPassword
+      );
+      
+      const hospitalDataObj = {
+        hospital_id: formData.newHospitalId,
+        email: formData.newHospitalEmail,
+        name: formData.hospitalName,
+        type: formData.hospitalType,
+        registration_number: formData.hospitalRegNumber,
+        gst_number: formData.hospitalGST,
+        year_established: formData.hospitalYear,
+        logo_url: logoUrl,
+        address: formData.hospitalAddress,
+        city: formData.hospitalCity,
+        state: formData.hospitalState,
+        pincode: formData.hospitalPincode,
+        map_location: formData.hospitalMapLocation,
+        official_email: formData.hospitalEmail,
+        phone: formData.hospitalPhone,
+        emergency_phone: formData.hospitalEmergencyPhone,
+        admin_name: formData.adminName,
+        admin_mobile: formData.adminMobile,
+        facilities: formData.facilities,
+        total_beds: parseInt(formData.totalBeds) || 0,
+        icu_beds: parseInt(formData.icuBeds) || 0,
+        general_beds: parseInt(formData.generalBeds) || 0,
+        private_rooms: parseInt(formData.privateRooms) || 0,
+        bank_account: formData.bankAccount,
+        upi_id: formData.upiId,
+        razorpay_id: formData.razorpayId,
+        uid: userCredential.user.uid,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+      
+      await setDoc(doc(db, 'hospitals', formData.newHospitalId), hospitalDataObj);
+      
+      return { success: true, hospitalData: hospitalDataObj };
+    } catch (error) {
+      console.error('Hospital registration error:', error);
+      throw error;
+    }
+  };
+
+  // Doctor Registration
+  const doctorRegister = async (formData) => {
+    try {
+      let photoUrl = '';
+      
+      // Upload photo if selected
+      if (formData.doctorPhoto) {
+        const photoRef = ref(storage, `doctors/${formData.newDoctorId}/photo`);
+        await uploadBytes(photoRef, formData.doctorPhoto);
+        photoUrl = await getDownloadURL(photoRef);
+      }
+      
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.newDoctorEmail,
+        formData.newDoctorPassword
+      );
+      
+      const doctorDataObj = {
+        doctor_id: formData.newDoctorId,
+        email: formData.newDoctorEmail,
+        name: formData.doctorName,
+        gender: formData.doctorGender,
+        dob: formData.doctorDob,
+        registration_no: formData.doctorRegistrationNo,
+        specialization: formData.doctorSpecialization,
+        qualification: formData.doctorQualification,
+        experience: formData.doctorExperience,
+        department: formData.doctorDepartment,
+        opd_days: formData.doctorOPDDays,
+        opd_time: formData.doctorOPDTime,
+        consultation_fee: formData.doctorConsultationFee,
+        online_fee: formData.doctorOnlineFee,
+        phone: formData.doctorPhone,
+        photo_url: photoUrl,
+        uid: userCredential.user.uid,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+      
+      await setDoc(doc(db, 'doctors', formData.newDoctorId), doctorDataObj);
+      
+      return { success: true, doctorData: doctorDataObj };
+    } catch (error) {
+      console.error('Doctor registration error:', error);
+      throw error;
     }
   };
 
@@ -73,6 +181,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('userType', 'hospital');
       localStorage.setItem('hospitalId', hospitalId);
       localStorage.setItem('hospitalName', hospitalDataFromDb.name);
+      localStorage.setItem('hospitalLogo', hospitalDataFromDb.logo_url || '/images/default-avatar.png');
       
       await updateDoc(hospitalRef, {
         lastLogin: new Date().toISOString()
@@ -113,6 +222,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('userType', 'doctor');
       localStorage.setItem('doctorId', doctorId);
       localStorage.setItem('doctorName', doctorDataFromDb.name);
+      localStorage.setItem('doctorPhoto', doctorDataFromDb.photo_url || '/images/default-avatar.png');
       
       await updateDoc(doctorRef, {
         lastLogin: new Date().toISOString()
@@ -241,8 +351,10 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('userType');
       localStorage.removeItem('hospitalId');
       localStorage.removeItem('hospitalName');
+      localStorage.removeItem('hospitalLogo');
       localStorage.removeItem('doctorId');
       localStorage.removeItem('doctorName');
+      localStorage.removeItem('doctorPhoto');
       localStorage.removeItem('isAdmin');
       localStorage.removeItem('adminEmail');
       localStorage.removeItem('adminUid');
@@ -255,116 +367,132 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
-  const checkExistingSession = async (user) => {
-    if (user) {
-      try {
-        // First check if this is an admin
-        const adminStatus = await checkIfAdmin(user);
-        if (adminStatus) {
-          setIsAdmin(true);
-          setUserType('admin');
-          setLoading(false);
-          return;
-        }
-
-        // Check for hospital session from localStorage
-        const storedHospitalId = localStorage.getItem('hospitalId');
-        const storedUserType = localStorage.getItem('userType');
-        
-        if (storedHospitalId && storedUserType === 'hospital') {
-          const hospitalRef = doc(db, 'hospitals', storedHospitalId);
-          const hospitalSnap = await getDoc(hospitalRef);
-          
-          if (hospitalSnap.exists() && hospitalSnap.data().email === user.email) {
-            setHospitalData(hospitalSnap.data());
-            setUserType('hospital');
-            
-            // Update last login
-            await updateDoc(hospitalRef, {
-              lastLogin: new Date().toISOString()
-            });
-            
+    const checkExistingSession = async (user) => {
+      if (user) {
+        try {
+          // First check if this is an admin
+          const adminStatus = await checkIfAdmin(user);
+          if (adminStatus) {
+            setIsAdmin(true);
+            setUserType('admin');
             setLoading(false);
             return;
-          } else {
-            // Invalid hospital session, clear it
-            localStorage.removeItem('hospitalId');
-            localStorage.removeItem('hospitalName');
-            localStorage.removeItem('userType');
           }
-        }
 
-        // Check for doctor session from localStorage
-        const storedDoctorId = localStorage.getItem('doctorId');
-        if (storedDoctorId && storedUserType === 'doctor') {
-          const doctorRef = doc(db, 'doctors', storedDoctorId);
-          const doctorSnap = await getDoc(doctorRef);
+          // Check for hospital session from localStorage
+          const storedHospitalId = localStorage.getItem('hospitalId');
+          const storedUserType = localStorage.getItem('userType');
           
-          if (doctorSnap.exists() && doctorSnap.data().email === user.email) {
-            setDoctorData(doctorSnap.data());
-            setUserType('doctor');
+          if (storedHospitalId && storedUserType === 'hospital') {
+            const hospitalRef = doc(db, 'hospitals', storedHospitalId);
+            const hospitalSnap = await getDoc(hospitalRef);
             
-            // Update last login
-            await updateDoc(doctorRef, {
-              lastLogin: new Date().toISOString()
-            });
-            
-            setLoading(false);
-            return;
-          } else {
-            // Invalid doctor session, clear it
-            localStorage.removeItem('doctorId');
-            localStorage.removeItem('doctorName');
-            localStorage.removeItem('userType');
+            if (hospitalSnap.exists() && hospitalSnap.data().email === user.email) {
+              const hospitalDataFromDb = hospitalSnap.data();
+              setHospitalData(hospitalDataFromDb);
+              setUserType('hospital');
+              
+              // Store logo in localStorage if not already there
+              if (hospitalDataFromDb.logo_url) {
+                localStorage.setItem('hospitalLogo', hospitalDataFromDb.logo_url);
+              }
+              
+              // Update last login
+              await updateDoc(hospitalRef, {
+                lastLogin: new Date().toISOString()
+              });
+              
+              setLoading(false);
+              return;
+            } else {
+              // Invalid hospital session, clear it
+              localStorage.removeItem('hospitalId');
+              localStorage.removeItem('hospitalName');
+              localStorage.removeItem('hospitalLogo');
+              localStorage.removeItem('userType');
+            }
           }
-        }
 
-        // If no specific role found, check regular users
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          setUserData(userSnap.data());
-          setUserType('user');
-          localStorage.setItem('userType', 'user');
+          // Check for doctor session from localStorage
+          const storedDoctorId = localStorage.getItem('doctorId');
+          if (storedDoctorId && storedUserType === 'doctor') {
+            const doctorRef = doc(db, 'doctors', storedDoctorId);
+            const doctorSnap = await getDoc(doctorRef);
+            
+            if (doctorSnap.exists() && doctorSnap.data().email === user.email) {
+              const doctorDataFromDb = doctorSnap.data();
+              setDoctorData(doctorDataFromDb);
+              setUserType('doctor');
+              
+              // Store photo in localStorage if not already there
+              if (doctorDataFromDb.photo_url) {
+                localStorage.setItem('doctorPhoto', doctorDataFromDb.photo_url);
+              }
+              
+              // Update last login
+              await updateDoc(doctorRef, {
+                lastLogin: new Date().toISOString()
+              });
+              
+              setLoading(false);
+              return;
+            } else {
+              // Invalid doctor session, clear it
+              localStorage.removeItem('doctorId');
+              localStorage.removeItem('doctorName');
+              localStorage.removeItem('doctorPhoto');
+              localStorage.removeItem('userType');
+            }
+          }
+
+          // If no specific role found, check regular users
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            setUserData(userSnap.data());
+            setUserType('user');
+            localStorage.setItem('userType', 'user');
+          }
+          
+        } catch (error) {
+          console.error("Error checking session:", error);
         }
-        
-      } catch (error) {
-        console.error("Error checking session:", error);
       }
-    }
-    setLoading(false);
-  };
-
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    setCurrentUser(user);
-    
-    if (user) {
-      await checkExistingSession(user);
-    } else {
-      // Clear all states when user signs out
-      setUserData(null);
-      setHospitalData(null);
-      setDoctorData(null);
-      setIsAdmin(false);
-      setUserType(null);
-      
-      // Clear all localStorage items
-      localStorage.removeItem('userType');
-      localStorage.removeItem('hospitalId');
-      localStorage.removeItem('hospitalName');
-      localStorage.removeItem('doctorId');
-      localStorage.removeItem('doctorName');
-      localStorage.removeItem('isAdmin');
-      localStorage.removeItem('adminEmail');
-      localStorage.removeItem('adminUid');
-      
       setLoading(false);
-    }
-  });
+    };
 
-  return unsubscribe;
-}, []);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      
+      if (user) {
+        await checkExistingSession(user);
+      } else {
+        // Clear all states when user signs out
+        setUserData(null);
+        setHospitalData(null);
+        setDoctorData(null);
+        setIsAdmin(false);
+        setUserType(null);
+        
+        // Clear all localStorage items
+        localStorage.removeItem('userType');
+        localStorage.removeItem('hospitalId');
+        localStorage.removeItem('hospitalName');
+        localStorage.removeItem('hospitalLogo');
+        localStorage.removeItem('doctorId');
+        localStorage.removeItem('doctorName');
+        localStorage.removeItem('doctorPhoto');
+        localStorage.removeItem('isAdmin');
+        localStorage.removeItem('adminEmail');
+        localStorage.removeItem('adminUid');
+        
+        setLoading(false);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   const value = {
     currentUser,
@@ -376,6 +504,8 @@ export function AuthProvider({ children }) {
     signInWithGoogle,
     hospitalLogin,
     doctorLogin,
+    hospitalRegister,
+    doctorRegister,
     logout,
     loading
   };

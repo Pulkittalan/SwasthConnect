@@ -1,125 +1,213 @@
 // src/pages/login/Login.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { Link, useNavigate } from 'react-router-dom'; // Added useNavigate
+import { doc, setDoc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { Link, useNavigate } from 'react-router-dom';
 import './Login.css';
-
+import { storage } from '../../firebase/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import videoBg from './2.mp4';
-
 
 const Login = () => {
   const [activeForm, setActiveForm] = useState(null);
+  const [doctorRegistrationType, setDoctorRegistrationType] = useState('hospital'); // 'hospital' or 'independent'
+  const [hospitalsList, setHospitalsList] = useState([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(false);
+  
   const [formData, setFormData] = useState({
     // Login fields
-    doctorId: '',
-    doctorPassword: '',
-    hospitalId: '',
-    hospitalPassword: '',
-    
-    // Doctor Registration
-    newDoctorId: '',
-    newDoctorPassword: '',
-    newDoctorEmail: '',
-    doctorName: '',
-    doctorGender: '',
-    doctorDob: '',
-    doctorRegistrationNo: '',
-    doctorSpecialization: '',
-    doctorQualification: 'MBBS',
-    doctorExperience: '',
-    doctorDepartment: '',
-    doctorOPDDays: ['Monday', 'Wednesday', 'Friday'],
-    doctorOPDTime: '09:00-17:00',
-    doctorConsultationFee: '',
-    doctorOnlineFee: '',
-    doctorPhone: '',
+    doctorId: "",
+    doctorPassword: "",
+    hospitalId: "",
+    hospitalPassword: "",
+
+    // Doctor Registration (Common)
+    newDoctorId: "",
+    newDoctorPassword: "",
+    newDoctorEmail: "",
+    doctorName: "",
+    doctorGender: "",
+    doctorDob: "",
+    doctorRegistrationNo: "",
+    doctorSpecialization: "",
+    doctorQualification: "MBBS",
+    doctorExperience: "",
+    doctorDepartment: "",
+    doctorOPDDays: ["Monday", "Wednesday", "Friday"],
+    doctorOPDTime: "09:00-17:00",
+    doctorConsultationFee: "",
+    doctorOnlineFee: "",
+    doctorPhone: "",
     doctorPhoto: null,
+    doctorBio: "",
+
+    // Hospital Doctor Specific
+    selectedHospitalId: "",
+    selectedHospitalName: "",
     
+    // Independent Doctor Specific
+    independentDoctorAddress: "",
+    independentDoctorCity: "",
+    independentDoctorState: "",
+    independentDoctorPincode: "",
+    independentDoctorClinicName: "",
+    independentDoctorExperienceYears: "",
+    independentDoctorQualificationDetails: "",
+    independentDoctorClinicPhone: "",
+
     // Hospital Registration
-    newHospitalId: '',
-    newHospitalPassword: '',
-    newHospitalEmail: '',
-    hospitalName: '',
-    hospitalType: 'clinic',
-    hospitalRegNumber: '',
-    hospitalGST: '',
+    newHospitalId: "",
+    newHospitalPassword: "",
+    newHospitalEmail: "",
+    hospitalName: "",
+    hospitalType: "clinic",
+    hospitalRegNumber: "",
+    hospitalGST: "",
     hospitalYear: new Date().getFullYear(),
     hospitalLogo: null,
-    hospitalAddress: '',
-    hospitalCity: '',
-    hospitalState: '',
-    hospitalPincode: '',
-    hospitalMapLocation: '',
-    hospitalEmail: '',
-    hospitalPhone: '',
-    hospitalEmergencyPhone: '',
-    adminName: '',
-    adminMobile: '',
+    hospitalAddress: "",
+    hospitalCity: "",
+    hospitalState: "",
+    hospitalPincode: "",
+    hospitalMapLocation: "",
+    hospitalEmail: "",
+    hospitalPhone: "",
+    hospitalEmergencyPhone: "",
+    adminName: "",
+    adminMobile: "",
     facilities: [],
-    totalBeds: '',
-    icuBeds: '',
-    generalBeds: '',
-    privateRooms: '',
-    bankAccount: '',
-    upiId: '',
-    razorpayId: ''
+    totalBeds: "",
+    icuBeds: "",
+    generalBeds: "",
+    privateRooms: "",
+    bankAccount: "",
+    upiId: "",
+    razorpayId: "",
   });
-  
+
   const [showDoctorPassword, setShowDoctorPassword] = useState(false);
   const [showHospitalPassword, setShowHospitalPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
+  const [error, setError] = useState("");
+
   const facilitiesList = [
-    'ICU', 'Ventilator', 'Emergency', 'Blood Bank', 
-    'Pharmacy', 'Lab', 'Ambulance', 'OPD', 'IPD'
+    "ICU",
+    "Ventilator",
+    "Emergency",
+    "Blood Bank",
+    "Pharmacy",
+    "Lab",
+    "Ambulance",
+    "OPD",
+    "IPD",
+  ];
+
+  const daysList = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
   ];
   
-  const daysList = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const qualificationOptions = ['MBBS', 'MD', 'MS', 'DNB', 'MCh', 'DM', 'BDS', 'MDS'];
-  const specializationOptions = ['Cardiology', 'Neurology', 'Orthopedics', 'Pediatrics', 'General Surgery', 'Gynecology', 'ENT', 'Dermatology'];
+  const qualificationOptions = [
+    "MBBS",
+    "MD",
+    "MS",
+    "DNB",
+    "MCh",
+    "DM",
+    "BDS",
+    "MDS",
+  ];
+  
+  const specializationOptions = [
+    "Cardiology",
+    "Neurology",
+    "Orthopedics",
+    "Pediatrics",
+    "General Surgery",
+    "Gynecology",
+    "ENT",
+    "Dermatology",
+    "Psychiatry",
+    "Radiology",
+    "Anesthesiology",
+    "Ophthalmology",
+    "Urology",
+    "Nephrology",
+    "Oncology",
+  ];
 
-  const navigate = useNavigate(); // Added navigate hook
+  const navigate = useNavigate();
+
+  // Fetch approved hospitals for dropdown
+  useEffect(() => {
+    const fetchHospitals = async () => {
+      if (activeForm === "doctor-registration" && doctorRegistrationType === "hospital") {
+        setLoadingHospitals(true);
+        try {
+          const hospitalsRef = collection(db, "hospitals");
+          const hospitalsSnap = await getDocs(hospitalsRef);
+          const approvedHospitals = hospitalsSnap.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+            .filter(hospital => hospital.status === "approved");
+          setHospitalsList(approvedHospitals);
+        } catch (error) {
+          console.error("Error fetching hospitals:", error);
+        } finally {
+          setLoadingHospitals(false);
+        }
+      }
+    };
+
+    fetchHospitals();
+  }, [activeForm, doctorRegistrationType]);
 
   // Handle form switching
   const showForm = (type) => {
     setActiveForm(type);
-    setError('');
+    setError("");
+    setDoctorRegistrationType('hospital'); // Reset to default
   };
 
   // Handle input changes
   const handleChange = (e) => {
     const { id, value, type, checked, files } = e.target;
-    
-    if (type === 'checkbox') {
-      if (id.startsWith('facility-')) {
-        const facility = id.replace('facility-', '');
-        setFormData(prev => ({
+
+    if (type === "checkbox") {
+      if (id.startsWith("facility-")) {
+        const facility = id.replace("facility-", "");
+        setFormData((prev) => ({
           ...prev,
-          facilities: checked 
+          facilities: checked
             ? [...prev.facilities, facility]
-            : prev.facilities.filter(f => f !== facility)
+            : prev.facilities.filter((f) => f !== facility),
         }));
-      } else if (id.startsWith('day-')) {
-        const day = id.replace('day-', '');
-        setFormData(prev => ({
+      } else if (id.startsWith("day-")) {
+        const day = id.replace("day-", "");
+        setFormData((prev) => ({
           ...prev,
-          doctorOPDDays: checked 
+          doctorOPDDays: checked
             ? [...prev.doctorOPDDays, day]
-            : prev.doctorOPDDays.filter(d => d !== day)
+            : prev.doctorOPDDays.filter((d) => d !== day),
         }));
       }
-    } else if (type === 'file') {
-      setFormData(prev => ({
+    } else if (type === "file") {
+      setFormData((prev) => ({
         ...prev,
-        [id]: files[0]
+        [id]: files[0],
       }));
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [id]: value
+        [id]: value,
       }));
     }
   };
@@ -127,81 +215,268 @@ const Login = () => {
   // Handle select changes
   const handleSelectChange = (e) => {
     const { id, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [id]: value
+      [id]: value,
     }));
   };
 
-  // Doctor Registration
+  // Handle hospital selection
+  const handleHospitalSelect = (e) => {
+    const hospitalId = e.target.value;
+    const selectedHospital = hospitalsList.find(h => h.id === hospitalId);
+    setFormData((prev) => ({
+      ...prev,
+      selectedHospitalId: hospitalId,
+      selectedHospitalName: selectedHospital ? selectedHospital.name : "",
+      doctorDepartment: selectedHospital?.type === "multi_specialty" ? "" : prev.doctorDepartment,
+    }));
+  };
+
+  // Doctor Registration - All doctors in ONE collection
   const handleDoctorRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    
+    setError("");
+
     try {
+      // Validation based on registration type
+      if (doctorRegistrationType === "hospital") {
+        if (!formData.selectedHospitalId) {
+          throw new Error("Please select a hospital");
+        }
+        if (!formData.doctorDepartment) {
+          throw new Error("Please enter department");
+        }
+      } else {
+        if (!formData.independentDoctorClinicName) {
+          throw new Error("Please enter clinic name");
+        }
+        if (!formData.independentDoctorAddress) {
+          throw new Error("Please enter clinic address");
+        }
+      }
+
       // 1. Create user in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.newDoctorEmail,
-        formData.newDoctorPassword
+        formData.newDoctorPassword,
       );
-      
-      // 2. Prepare doctor data
+
+      let photoUrl = "";
+      if (formData.doctorPhoto) {
+        const photoRef = ref(
+          storage,
+          `doctors/${formData.newDoctorId}/profile`,
+        );
+        await uploadBytes(photoRef, formData.doctorPhoto);
+        photoUrl = await getDownloadURL(photoRef);
+      }
+
+      // Create unified doctor object for 'doctors' collection
       const doctorData = {
-        doctor_id: formData.newDoctorId,
-        email: formData.newDoctorEmail,
+        // Core fields
+        uid: userCredential.user.uid,
+        doctorId: formData.newDoctorId,
         name: formData.doctorName,
+        email: formData.newDoctorEmail,
+        phone: formData.doctorPhone,
         gender: formData.doctorGender,
         dob: formData.doctorDob,
-        registration_no: formData.doctorRegistrationNo,
+        
+        // Professional fields
         specialization: formData.doctorSpecialization,
         qualification: formData.doctorQualification,
-        experience: formData.doctorExperience,
-        department: formData.doctorDepartment,
+        registration_no: formData.doctorRegistrationNo,
+        experience_years: parseInt(formData.doctorExperience) || 0,
+        consultation_fee: parseInt(formData.doctorConsultationFee) || 0,
+        online_fee: parseInt(formData.doctorOnlineFee) || 0,
         opd_days: formData.doctorOPDDays,
         opd_time: formData.doctorOPDTime,
-        consultation_fee: formData.doctorConsultationFee,
-        online_fee: formData.doctorOnlineFee,
-        phone: formData.doctorPhone,
-        photo_url: '', // Will be updated after file upload
-        uid: userCredential.user.uid,
-        status: 'pending',
-        createdAt: new Date().toISOString()
+        bio: formData.doctorBio || "",
+        
+        // Media
+        photo_url: photoUrl,
+        
+        // Type identification - CRITICAL for filtering
+        doctorType: doctorRegistrationType, // "hospital" or "independent"
+        
+        // Status
+        status: "pending", // Needs admin approval
+        isActive: true,
+        
+        // Timestamps
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
-      
-      // 3. Save doctor data to Firestore
-      await setDoc(doc(db, 'doctors', formData.newDoctorId), doctorData);
-      
-      alert('✅ Doctor registered successfully! Awaiting verification.');
-      showForm('doctor-login');
-      
+
+      // Add type-specific fields
+      if (doctorRegistrationType === "hospital") {
+        doctorData.hospitalId = formData.selectedHospitalId;
+        doctorData.hospitalName = formData.selectedHospitalName;
+        doctorData.department = formData.doctorDepartment;
+      } else {
+        doctorData.clinicName = formData.independentDoctorClinicName;
+        doctorData.clinicAddress = formData.independentDoctorAddress;
+        doctorData.clinicCity = formData.independentDoctorCity;
+        doctorData.clinicState = formData.independentDoctorState;
+        doctorData.clinicPincode = formData.independentDoctorPincode;
+        doctorData.clinicPhone = formData.independentDoctorClinicPhone || formData.doctorPhone;
+        doctorData.qualificationDetails = formData.independentDoctorQualificationDetails || "";
+        doctorData.totalExperienceYears = parseInt(formData.independentDoctorExperienceYears) || 0;
+      }
+
+      // Save to unified 'doctors' collection
+      await setDoc(doc(db, "doctors", formData.newDoctorId), doctorData);
+
+      alert("✅ Doctor registered successfully! Awaiting admin verification.");
+      showForm("doctor-login");
+
       // Clear form
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        newDoctorId: '',
-        newDoctorPassword: '',
-        newDoctorEmail: '',
-        doctorName: '',
-        doctorGender: 'male',
-        doctorDob: '',
-        doctorRegistrationNo: '',
-        doctorSpecialization: '',
-        doctorQualification: 'MBBS',
-        doctorExperience: '',
-        doctorDepartment: '',
-        doctorOPDDays: ['Monday', 'Wednesday', 'Friday'],
-        doctorOPDTime: '09:00-17:00',
-        doctorConsultationFee: '',
-        doctorOnlineFee: '',
-        doctorPhone: '',
-        doctorPhoto: null
+        newDoctorId: "",
+        newDoctorPassword: "",
+        newDoctorEmail: "",
+        doctorName: "",
+        doctorGender: "",
+        doctorDob: "",
+        doctorRegistrationNo: "",
+        doctorSpecialization: "",
+        doctorQualification: "MBBS",
+        doctorExperience: "",
+        doctorDepartment: "",
+        doctorOPDDays: ["Monday", "Wednesday", "Friday"],
+        doctorOPDTime: "09:00-17:00",
+        doctorConsultationFee: "",
+        doctorOnlineFee: "",
+        doctorPhone: "",
+        doctorPhoto: null,
+        doctorBio: "",
+        selectedHospitalId: "",
+        selectedHospitalName: "",
+        independentDoctorAddress: "",
+        independentDoctorCity: "",
+        independentDoctorState: "",
+        independentDoctorPincode: "",
+        independentDoctorClinicName: "",
+        independentDoctorExperienceYears: "",
+        independentDoctorQualificationDetails: "",
+        independentDoctorClinicPhone: "",
       }));
-      
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error("Registration error:", error);
       setError(error.message);
-      alert('❌ Error: ' + error.message);
+      alert("❌ Error: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Doctor Login - Now fetches from unified 'doctors' collection
+  const handleDoctorLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      // Fetch from unified doctors collection
+      const docRef = doc(db, "doctors", formData.doctorId);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        throw new Error("❌ Doctor not found. Please check your Doctor ID.");
+      }
+
+      const doctorData = docSnap.data();
+
+      if (doctorData.status !== "approved") {
+        throw new Error(
+          "❌ Account pending verification. Please contact administrator.",
+        );
+      }
+
+      // Sign in with email and password
+      await signInWithEmailAndPassword(
+        auth,
+        doctorData.email,
+        formData.doctorPassword,
+      );
+
+      // Store user info in localStorage
+      localStorage.setItem("userType", "doctor");
+      localStorage.setItem("doctorId", formData.doctorId);
+      localStorage.setItem("doctorName", doctorData.name);
+      localStorage.setItem("doctorType", doctorData.doctorType); // "hospital" or "independent"
+      localStorage.setItem("doctorEmail", doctorData.email);
+      localStorage.setItem("doctorPhoto", doctorData.photo_url || "");
+      
+      if (doctorData.doctorType === "hospital") {
+        localStorage.setItem("hospitalId", doctorData.hospitalId);
+        localStorage.setItem("hospitalName", doctorData.hospitalName);
+        localStorage.setItem("department", doctorData.department);
+      } else {
+        localStorage.setItem("clinicName", doctorData.clinicName);
+        localStorage.setItem("clinicCity", doctorData.clinicCity);
+      }
+
+      alert("✅ Doctor login successful!");
+      
+      // Redirect based on doctor type
+      if (doctorData.doctorType === "hospital") {
+        window.location.href = "/hospital-doctor-dashboard";
+      } else {
+        window.location.href = "/independent-doctor-dashboard";
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setError(error.message);
+      alert("❌ Error: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hospital Login
+  const handleHospitalLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const docRef = doc(db, "hospitals", formData.hospitalId);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        throw new Error("❌ Hospital not found");
+      }
+
+      const hospitalData = docSnap.data();
+
+      if (hospitalData.status !== "approved") {
+        throw new Error(
+          "❌ Account pending verification. Please contact administrator.",
+        );
+      }
+
+      await signInWithEmailAndPassword(
+        auth,
+        hospitalData.email,
+        formData.hospitalPassword,
+      );
+
+      localStorage.setItem("userType", "hospital");
+      localStorage.setItem("hospitalId", formData.hospitalId);
+      localStorage.setItem("hospitalName", hospitalData.name);
+      localStorage.setItem("hospitalLogo", hospitalData.logo_url || "/images/default-avatar.png");
+
+      alert("✅ Hospital login successful!");
+      navigate(`/dashboard/${formData.hospitalId}`);
+    } catch (error) {
+      console.error("Login error:", error);
+      setError(error.message);
+      alert("❌ Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -211,15 +486,26 @@ const Login = () => {
   const handleHospitalRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-    
+    setError("");
+
     try {
+      let logoUrl = "";
+
+      if (formData.hospitalLogo) {
+        const logoRef = ref(
+          storage,
+          `hospitals/${formData.newHospitalId}/logo`,
+        );
+        await uploadBytes(logoRef, formData.hospitalLogo);
+        logoUrl = await getDownloadURL(logoRef);
+      }
+
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.newHospitalEmail,
-        formData.newHospitalPassword
+        formData.newHospitalPassword,
       );
-      
+
       const hospitalData = {
         hospital_id: formData.newHospitalId,
         email: formData.newHospitalEmail,
@@ -228,7 +514,7 @@ const Login = () => {
         registration_number: formData.hospitalRegNumber,
         gst_number: formData.hospitalGST,
         year_established: formData.hospitalYear,
-        logo_url: '',
+        logo_url: logoUrl,
         address: formData.hospitalAddress,
         city: formData.hospitalCity,
         state: formData.hospitalState,
@@ -248,135 +534,50 @@ const Login = () => {
         upi_id: formData.upiId,
         razorpay_id: formData.razorpayId,
         uid: userCredential.user.uid,
-        status: 'pending',
-        createdAt: new Date().toISOString()
+        status: "pending",
+        createdAt: new Date().toISOString(),
       };
-      
-      await setDoc(doc(db, 'hospitals', formData.newHospitalId), hospitalData);
-      
-      alert('✅ Hospital registered successfully! Awaiting verification.');
-      showForm('hospital-login');
-      
+
+      await setDoc(doc(db, "hospitals", formData.newHospitalId), hospitalData);
+
+      alert("✅ Hospital registered successfully! Awaiting verification.");
+      showForm("hospital-login");
+
       // Clear form
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        newHospitalId: '',
-        newHospitalPassword: '',
-        newHospitalEmail: '',
-        hospitalName: '',
-        hospitalType: 'clinic',
-        hospitalRegNumber: '',
-        hospitalGST: '',
+        newHospitalId: "",
+        newHospitalPassword: "",
+        newHospitalEmail: "",
+        hospitalName: "",
+        hospitalType: "clinic",
+        hospitalRegNumber: "",
+        hospitalGST: "",
         hospitalYear: new Date().getFullYear(),
         hospitalLogo: null,
-        hospitalAddress: '',
-        hospitalCity: '',
-        hospitalState: '',
-        hospitalPincode: '',
-        hospitalMapLocation: '',
-        hospitalEmail: '',
-        hospitalPhone: '',
-        hospitalEmergencyPhone: '',
-        adminName: '',
-        adminMobile: '',
+        hospitalAddress: "",
+        hospitalCity: "",
+        hospitalState: "",
+        hospitalPincode: "",
+        hospitalMapLocation: "",
+        hospitalEmail: "",
+        hospitalPhone: "",
+        hospitalEmergencyPhone: "",
+        adminName: "",
+        adminMobile: "",
         facilities: [],
-        totalBeds: '',
-        icuBeds: '',
-        generalBeds: '',
-        privateRooms: '',
-        bankAccount: '',
-        upiId: '',
-        razorpayId: ''
+        totalBeds: "",
+        icuBeds: "",
+        generalBeds: "",
+        privateRooms: "",
+        bankAccount: "",
+        upiId: "",
+        razorpayId: "",
       }));
-      
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error("Registration error:", error);
       setError(error.message);
-      alert('❌ Error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Doctor Login
-  const handleDoctorLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      const docRef = doc(db, 'doctors', formData.doctorId);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('❌ Doctor not found');
-      }
-      
-      const doctorData = docSnap.data();
-      
-      if (doctorData.status !== 'approved') {
-        throw new Error('❌ Account pending verification. Please contact administrator.');
-      }
-      
-      await signInWithEmailAndPassword(
-        auth,
-        doctorData.email,
-        formData.doctorPassword
-      );
-      
-      localStorage.setItem('userType', 'doctor');
-      localStorage.setItem('doctorId', formData.doctorId);
-      localStorage.setItem('doctorName', doctorData.name);
-      
-      alert('✅ Doctor login successful!');
-      window.location.href = '/doctor-dashboard';
-      
-    } catch (error) {
-      console.error('Login error:', error);
-      setError(error.message);
-      alert('❌ Error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Hospital Login
-  const handleHospitalLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      const docRef = doc(db, 'hospitals', formData.hospitalId);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        throw new Error('❌ Hospital not found');
-      }
-      
-      const hospitalData = docSnap.data();
-      
-      if (hospitalData.status !== 'approved') {
-        throw new Error('❌ Account pending verification. Please contact administrator.');
-      }
-      
-      await signInWithEmailAndPassword(
-        auth,
-        hospitalData.email,
-        formData.hospitalPassword
-      );
-      
-      localStorage.setItem('userType', 'hospital');
-      localStorage.setItem('hospitalId', formData.hospitalId);
-      localStorage.setItem('hospitalName', hospitalData.name);
-      
-      alert('✅ Hospital login successful!');
-      navigate(`/dashboard/${formData.hospitalId}`);
-      
-    } catch (error) {
-      console.error('Login error:', error);
-      setError(error.message);
-      alert('❌ Error: ' + error.message);
+      alert("❌ Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -384,64 +585,65 @@ const Login = () => {
 
   // Admin Login Button Handler
   const handleAdminLogin = () => {
-    navigate('/admin-login');
+    navigate("/admin-login");
   };
 
   return (
     <div className="login-page">
-      {/* Video Background */}
       <div className="background-video">
         <video autoPlay loop muted className="video-background">
           <source src={videoBg} type="video/mp4" />
         </video>
       </div>
 
-      {/* Login Container */}
-      <div className="login-container"> 
+      <div className="login-container">
         <div className="image-container">
           <Link to="/">
             <img src="/images/logo.png" alt="Dashboard" />
           </Link>
           <h2>Welcome to SwasthConnect</h2>
         </div>
-        
+
         <div className="login-box">
           <h1>Login</h1>
-          
-          {/* Error Message */}
+
           {error && (
-            <div className="error-message" style={{color: 'red', textAlign: 'center', marginBottom: '10px'}}>
+            <div
+              className="error-message"
+              style={{
+                color: "red",
+                textAlign: "center",
+                marginBottom: "10px",
+              }}
+            >
               {error}
             </div>
           )}
-          
-          {/* Login Options */}
+
           <div className="login-options">
-            <button 
-              className="login-option-btn" 
-              onClick={() => showForm('doctor-login')}
+            <button
+              className="login-option-btn"
+              onClick={() => showForm("doctor-login")}
               disabled={loading}
             >
               👨‍⚕️ Doctor
             </button>
-            <button 
-              className="login-option-btn" 
-              onClick={() => showForm('hospital-login')}
+            <button
+              className="login-option-btn"
+              onClick={() => showForm("hospital-login")}
               disabled={loading}
             >
               🏥 Hospital
             </button>
-            
-            {/* ADMIN LOGIN BUTTON - Added Here */}
-            <button 
-              className="login-option-btn admin-btn" 
+            <button
+              className="login-option-btn admin-btn"
               onClick={handleAdminLogin}
               disabled={loading}
               style={{
-                background: 'linear-gradient(135deg, #9c27b0, #673ab7)',
-                color: 'white',
-                marginTop: '10px',
-                border: '2px solid rgba(255, 255, 255, 0.5)'
+                background: "linear-gradient(135deg, #9c27b0, #673ab7)",
+                color: "white",
+                marginTop: "10px",
+                border: "2px solid rgba(255, 255, 255, 0.5)",
               }}
             >
               👑 Admin Login
@@ -449,7 +651,7 @@ const Login = () => {
           </div>
 
           {/* Doctor Login Form */}
-          {activeForm === 'doctor-login' && (
+          {activeForm === "doctor-login" && (
             <form className="login-form active" onSubmit={handleDoctorLogin}>
               <input
                 type="text"
@@ -470,16 +672,19 @@ const Login = () => {
                 disabled={loading}
               />
               <button type="submit" className="login-btn" disabled={loading}>
-                {loading ? 'Logging in...' : '👨‍⚕️ Login as Doctor'}
+                {loading ? "Logging in..." : "👨‍⚕️ Login as Doctor"}
               </button>
-              <p className="registration-link" onClick={() => showForm('doctor-registration')}>
+              <p
+                className="registration-link"
+                onClick={() => showForm("doctor-registration")}
+              >
                 Don't have an account? Register as Doctor
               </p>
             </form>
           )}
 
           {/* Hospital Login Form */}
-          {activeForm === 'hospital-login' && (
+          {activeForm === "hospital-login" && (
             <form className="login-form active" onSubmit={handleHospitalLogin}>
               <input
                 type="text"
@@ -500,20 +705,193 @@ const Login = () => {
                 disabled={loading}
               />
               <button type="submit" className="login-btn" disabled={loading}>
-                {loading ? 'Logging in...' : '🏥 Login as Hospital'}
+                {loading ? "Logging in..." : "🏥 Login as Hospital"}
               </button>
-              <p className="registration-link" onClick={() => showForm('hospital-registration')}>
+              <p
+                className="registration-link"
+                onClick={() => showForm("hospital-registration")}
+              >
                 Don't have an account? Register as Hospital
               </p>
             </form>
           )}
 
-          {/* Doctor Registration Form */}
-          {activeForm === 'doctor-registration' && (
-            <form className="registration-form active" onSubmit={handleDoctorRegister}>
-              <h3 style={{textAlign: 'center', marginBottom: '20px', color: '#333'}}>👨‍⚕️ Doctor Registration</h3>
-              
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+          {/* Doctor Registration Form - UNIFIED */}
+          {activeForm === "doctor-registration" && (
+            <form
+              className="registration-form active"
+              onSubmit={handleDoctorRegister}
+              style={{ maxHeight: "70vh", overflowY: "auto", padding: "20px" }}
+            >
+              <h3 style={{ textAlign: "center", marginBottom: "20px", color: "#333" }}>
+                👨‍⚕️ Doctor Registration
+              </h3>
+
+              {/* Doctor Type Selection */}
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{ display: "block", marginBottom: "10px", fontWeight: "bold" }}>
+                  Doctor Type:
+                </label>
+                <div style={{ display: "flex", gap: "15px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <input
+                      type="radio"
+                      name="doctorType"
+                      value="hospital"
+                      checked={doctorRegistrationType === "hospital"}
+                      onChange={() => setDoctorRegistrationType("hospital")}
+                      disabled={loading}
+                    />
+                    🏥 Hospital Doctor
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <input
+                      type="radio"
+                      name="doctorType"
+                      value="independent"
+                      checked={doctorRegistrationType === "independent"}
+                      onChange={() => setDoctorRegistrationType("independent")}
+                      disabled={loading}
+                    />
+                    🏪 Independent Doctor
+                  </label>
+                </div>
+              </div>
+
+              {/* Hospital Doctor Specific Fields */}
+              {doctorRegistrationType === "hospital" && (
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold" }}>
+                    Select Hospital *
+                  </label>
+                  <select
+                    id="selectedHospitalId"
+                    value={formData.selectedHospitalId}
+                    onChange={handleHospitalSelect}
+                    required
+                    disabled={loading || loadingHospitals}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "8px",
+                      border: "1px solid #ccc",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <option value="">{loadingHospitals ? "Loading hospitals..." : "Select a hospital"}</option>
+                    {hospitalsList.map((hospital) => (
+                      <option key={hospital.id} value={hospital.id}>
+                        {hospital.name} - {hospital.city}, {hospital.state}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {formData.selectedHospitalName && (
+                    <div style={{ fontSize: "12px", color: "#0d9488", marginTop: "5px" }}>
+                      ✓ Hospital: {formData.selectedHospitalName}
+                    </div>
+                  )}
+                  
+                  <input
+                    type="text"
+                    placeholder="Department *"
+                    id="doctorDepartment"
+                    value={formData.doctorDepartment}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    style={{ marginTop: "10px", width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
+                  />
+                </div>
+              )}
+
+              {/* Independent Doctor Specific Fields */}
+              {doctorRegistrationType === "independent" && (
+                <div style={{ marginBottom: "15px" }}>
+                  <input
+                    type="text"
+                    placeholder="Clinic Name *"
+                    id="independentDoctorClinicName"
+                    value={formData.independentDoctorClinicName}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginBottom: "10px" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Clinic Phone"
+                    id="independentDoctorClinicPhone"
+                    value={formData.independentDoctorClinicPhone}
+                    onChange={handleChange}
+                    disabled={loading}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginBottom: "10px" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Clinic Address *"
+                    id="independentDoctorAddress"
+                    value={formData.independentDoctorAddress}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginBottom: "10px" }}
+                  />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                    <input
+                      type="text"
+                      placeholder="City *"
+                      id="independentDoctorCity"
+                      value={formData.independentDoctorCity}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="State *"
+                      id="independentDoctorState"
+                      value={formData.independentDoctorState}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Pincode *"
+                    id="independentDoctorPincode"
+                    value={formData.independentDoctorPincode}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginBottom: "10px" }}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Total Experience (Years)"
+                    id="independentDoctorExperienceYears"
+                    value={formData.independentDoctorExperienceYears}
+                    onChange={handleChange}
+                    disabled={loading}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc", marginBottom: "10px" }}
+                  />
+                  <textarea
+                    placeholder="Qualification Details"
+                    id="independentDoctorQualificationDetails"
+                    value={formData.independentDoctorQualificationDetails}
+                    onChange={handleChange}
+                    disabled={loading}
+                    rows="2"
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
+                  />
+                </div>
+              )}
+
+              {/* Common Doctor Fields */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Doctor ID *"
@@ -533,16 +911,16 @@ const Login = () => {
                     required
                     disabled={loading}
                   />
-                  <span 
-                    className="eye-icon" 
+                  <span
+                    className="eye-icon"
                     onClick={() => setShowDoctorPassword(!showDoctorPassword)}
                   >
-                    {showDoctorPassword ? '👁️' : '🙈'}
+                    {showDoctorPassword ? "👁️" : "🙈"}
                   </span>
                 </div>
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Full Name *"
@@ -557,15 +935,16 @@ const Login = () => {
                   value={formData.doctorGender}
                   onChange={handleSelectChange}
                   disabled={loading}
-                  style={{padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}}
+                  style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
                 >
+                  <option value="">Select Gender</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
                   <option value="other">Other</option>
                 </select>
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="date"
                   placeholder="Date of Birth"
@@ -593,20 +972,22 @@ const Login = () => {
                 onChange={handleChange}
                 required
                 disabled={loading}
-                style={{marginBottom: '10px'}}
+                style={{ marginBottom: "10px", width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
               />
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <select
                   id="doctorSpecialization"
                   value={formData.doctorSpecialization}
                   onChange={handleSelectChange}
                   disabled={loading}
-                  style={{padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}}
+                  style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
                 >
                   <option value="">Select Specialization</option>
-                  {specializationOptions.map(spec => (
-                    <option key={spec} value={spec}>{spec}</option>
+                  {specializationOptions.map((spec) => (
+                    <option key={spec} value={spec}>
+                      {spec}
+                    </option>
                   ))}
                 </select>
                 <select
@@ -614,15 +995,17 @@ const Login = () => {
                   value={formData.doctorQualification}
                   onChange={handleSelectChange}
                   disabled={loading}
-                  style={{padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}}
+                  style={{ padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
                 >
-                  {qualificationOptions.map(qual => (
-                    <option key={qual} value={qual}>{qual}</option>
+                  {qualificationOptions.map((qual) => (
+                    <option key={qual} value={qual}>
+                      {qual}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="number"
                   placeholder="Years of Experience"
@@ -642,28 +1025,20 @@ const Login = () => {
                 />
               </div>
 
-              <input
-                type="text"
-                placeholder="Department"
-                id="doctorDepartment"
-                value={formData.doctorDepartment}
-                onChange={handleChange}
-                disabled={loading}
-                style={{marginBottom: '10px'}}
-              />
-
-              <div style={{marginBottom: '15px'}}>
-                <label style={{display: 'block', marginBottom: '5px', fontSize: '14px'}}>OPD Days:</label>
-                <div style={{display: 'flex', flexWrap: 'wrap', gap: '5px'}}>
-                  {daysList.map(day => (
-                    <label key={day} style={{display: 'flex', alignItems: 'center', fontSize: '12px'}}>
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>
+                  OPD Days:
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                  {daysList.map((day) => (
+                    <label key={day} style={{ display: "flex", alignItems: "center", fontSize: "12px" }}>
                       <input
                         type="checkbox"
                         id={`day-${day}`}
                         checked={formData.doctorOPDDays.includes(day)}
                         onChange={handleChange}
                         disabled={loading}
-                        style={{marginRight: '3px'}}
+                        style={{ marginRight: "3px" }}
                       />
                       {day.substring(0, 3)}
                     </label>
@@ -671,7 +1046,7 @@ const Login = () => {
                 </div>
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="OPD Time (e.g., 09:00-17:00)"
@@ -682,10 +1057,11 @@ const Login = () => {
                 />
                 <input
                   type="number"
-                  placeholder="Consultation Fee"
+                  placeholder="Consultation Fee *"
                   id="doctorConsultationFee"
                   value={formData.doctorConsultationFee}
                   onChange={handleChange}
+                  required
                   disabled={loading}
                 />
               </div>
@@ -697,36 +1073,55 @@ const Login = () => {
                 value={formData.doctorOnlineFee}
                 onChange={handleChange}
                 disabled={loading}
-                style={{marginBottom: '15px'}}
+                style={{ marginBottom: "15px", width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
               />
 
-              <div style={{marginBottom: '15px'}}>
-                <label style={{display: 'block', marginBottom: '5px', fontSize: '14px'}}>Upload Photo:</label>
+              <textarea
+                placeholder="Short Bio / About"
+                id="doctorBio"
+                value={formData.doctorBio}
+                onChange={handleChange}
+                disabled={loading}
+                rows="3"
+                style={{ marginBottom: "15px", width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
+              />
+
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>
+                  Upload Photo:
+                </label>
                 <input
                   type="file"
                   id="doctorPhoto"
                   accept="image/*"
                   onChange={handleChange}
                   disabled={loading}
-                  style={{width: '100%', padding: '5px'}}
+                  style={{ width: "100%", padding: "5px" }}
                 />
               </div>
 
               <button type="submit" className="register-btn" disabled={loading}>
-                {loading ? 'Registering...' : '👨‍⚕️ Register as Doctor'}
+                {loading ? "Registering..." : "👨‍⚕️ Register as Doctor"}
               </button>
-              <p className="back-link" onClick={() => showForm('doctor-login')}>
+              <p className="back-link" onClick={() => showForm("doctor-login")}>
                 Back to Doctor Login
               </p>
             </form>
           )}
 
           {/* Hospital Registration Form */}
-          {activeForm === 'hospital-registration' && (
-            <form className="registration-form active" onSubmit={handleHospitalRegister}>
-              <h3 style={{textAlign: 'center', marginBottom: '20px', color: '#333'}}>🏥 Hospital Registration</h3>
-              
-              <div style={{marginBottom: '15px'}}>
+          {activeForm === "hospital-registration" && (
+            <form
+              className="registration-form active"
+              onSubmit={handleHospitalRegister}
+              style={{ maxHeight: "70vh", overflowY: "auto", padding: "20px" }}
+            >
+              <h3 style={{ textAlign: "center", marginBottom: "20px", color: "#333" }}>
+                🏥 Hospital Registration
+              </h3>
+
+              {/* Hospital Registration Fields (same as before) */}
+              <div style={{ marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Hospital Name *"
@@ -735,10 +1130,10 @@ const Login = () => {
                   onChange={handleChange}
                   required
                   disabled={loading}
-                  style={{marginBottom: '10px'}}
+                  style={{ marginBottom: "10px", width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
                 />
-                
-                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px'}}>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <input
                     type="text"
                     placeholder="Hospital ID *"
@@ -758,11 +1153,11 @@ const Login = () => {
                       required
                       disabled={loading}
                     />
-                    <span 
-                      className="eye-icon" 
+                    <span
+                      className="eye-icon"
                       onClick={() => setShowHospitalPassword(!showHospitalPassword)}
                     >
-                      {showHospitalPassword ? '👁️' : '🙈'}
+                      {showHospitalPassword ? "👁️" : "🙈"}
                     </span>
                   </div>
                 </div>
@@ -772,7 +1167,13 @@ const Login = () => {
                   value={formData.hospitalType}
                   onChange={handleSelectChange}
                   disabled={loading}
-                  style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', marginBottom: '10px'}}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "8px",
+                    border: "1px solid #ccc",
+                    marginBottom: "10px",
+                  }}
                 >
                   <option value="clinic">Clinic</option>
                   <option value="nursing_home">Nursing Home</option>
@@ -781,7 +1182,7 @@ const Login = () => {
                 </select>
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Registration Number *"
@@ -801,7 +1202,7 @@ const Login = () => {
                 />
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="number"
                   placeholder="Year Established"
@@ -829,10 +1230,10 @@ const Login = () => {
                 onChange={handleChange}
                 required
                 disabled={loading}
-                style={{marginBottom: '10px'}}
+                style={{ marginBottom: "10px", width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc" }}
               />
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="City *"
@@ -862,7 +1263,7 @@ const Login = () => {
                 />
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Hospital Phone *"
@@ -882,7 +1283,7 @@ const Login = () => {
                 />
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Admin Name *"
@@ -903,18 +1304,20 @@ const Login = () => {
                 />
               </div>
 
-              <div style={{marginBottom: '15px'}}>
-                <label style={{display: 'block', marginBottom: '5px', fontSize: '14px'}}>Facilities:</label>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '5px'}}>
-                  {facilitiesList.map(facility => (
-                    <label key={facility} style={{display: 'flex', alignItems: 'center', fontSize: '12px'}}>
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>
+                  Facilities:
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "5px" }}>
+                  {facilitiesList.map((facility) => (
+                    <label key={facility} style={{ display: "flex", alignItems: "center", fontSize: "12px" }}>
                       <input
                         type="checkbox"
                         id={`facility-${facility}`}
                         checked={formData.facilities.includes(facility)}
                         onChange={handleChange}
                         disabled={loading}
-                        style={{marginRight: '3px'}}
+                        style={{ marginRight: "3px" }}
                       />
                       {facility}
                     </label>
@@ -922,9 +1325,11 @@ const Login = () => {
                 </div>
               </div>
 
-              <div style={{marginBottom: '15px'}}>
-                <label style={{display: 'block', marginBottom: '5px', fontSize: '14px'}}>Bed Capacity:</label>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px'}}>
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>
+                  Bed Capacity:
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
                   <input
                     type="number"
                     placeholder="Total Beds"
@@ -932,7 +1337,7 @@ const Login = () => {
                     value={formData.totalBeds}
                     onChange={handleChange}
                     disabled={loading}
-                    style={{fontSize: '12px', padding: '8px'}}
+                    style={{ fontSize: "12px", padding: "8px" }}
                   />
                   <input
                     type="number"
@@ -941,7 +1346,7 @@ const Login = () => {
                     value={formData.icuBeds}
                     onChange={handleChange}
                     disabled={loading}
-                    style={{fontSize: '12px', padding: '8px'}}
+                    style={{ fontSize: "12px", padding: "8px" }}
                   />
                   <input
                     type="number"
@@ -950,7 +1355,7 @@ const Login = () => {
                     value={formData.generalBeds}
                     onChange={handleChange}
                     disabled={loading}
-                    style={{fontSize: '12px', padding: '8px'}}
+                    style={{ fontSize: "12px", padding: "8px" }}
                   />
                   <input
                     type="number"
@@ -959,12 +1364,12 @@ const Login = () => {
                     value={formData.privateRooms}
                     onChange={handleChange}
                     disabled={loading}
-                    style={{fontSize: '12px', padding: '8px'}}
+                    style={{ fontSize: "12px", padding: "8px" }}
                   />
                 </div>
               </div>
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "15px" }}>
                 <input
                   type="text"
                   placeholder="Bank Account / UPI"
@@ -983,22 +1388,24 @@ const Login = () => {
                 />
               </div>
 
-              <div style={{marginBottom: '15px'}}>
-                <label style={{display: 'block', marginBottom: '5px', fontSize: '14px'}}>Upload Hospital Logo:</label>
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>
+                  Upload Hospital Logo:
+                </label>
                 <input
                   type="file"
                   id="hospitalLogo"
                   accept="image/*"
                   onChange={handleChange}
                   disabled={loading}
-                  style={{width: '100%', padding: '5px'}}
+                  style={{ width: "100%", padding: "5px" }}
                 />
               </div>
 
               <button type="submit" className="register-btn" disabled={loading}>
-                {loading ? 'Registering...' : '🏥 Register as Hospital'}
+                {loading ? "Registering..." : "🏥 Register as Hospital"}
               </button>
-              <p className="back-link" onClick={() => showForm('hospital-login')}>
+              <p className="back-link" onClick={() => showForm("hospital-login")}>
                 Back to Hospital Login
               </p>
             </form>

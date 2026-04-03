@@ -1,4 +1,4 @@
-// BedManagement.jsx - Updated with dynamic floors support
+// BedManagement.jsx - Updated with Bed Availability Prediction
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebase';
@@ -44,6 +44,11 @@ const BedManagement = () => {
   const [selectedBed, setSelectedBed] = useState(null);
   const [targetBed, setTargetBed] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  
+  // Prediction States
+  const [bedPredictions, setBedPredictions] = useState([]);
+  const [showPredictionsModal, setShowPredictionsModal] = useState(false);
+  const [predictionLoading, setPredictionLoading] = useState(false);
   
   // AI Allocation Criteria
   const [allocationCriteria, setAllocationCriteria] = useState({
@@ -109,6 +114,208 @@ const BedManagement = () => {
   // Track processed patient IDs to prevent duplicates
   const processedPatientIds = useRef(new Set());
 
+  // ==================== PREDICTION FUNCTIONS ====================
+  
+  // Calculate days admitted from timestamp
+  const calculateDaysAdmitted = (admissionDate) => {
+    if (!admissionDate) return 0;
+    
+    let admission;
+    if (admissionDate.seconds) {
+      admission = new Date(admissionDate.seconds * 1000);
+    } else if (admissionDate.toDate) {
+      admission = admissionDate.toDate();
+    } else {
+      admission = new Date(admissionDate);
+    }
+    
+    const now = new Date();
+    const diffTime = Math.abs(now - admission);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  // Calculate estimated discharge based on bed type, condition, and priority
+  const calculateEstimatedDischarge = (bed) => {
+    // Average stay times by bed type (in days) - based on medical standards
+    const averageStays = {
+      'ICU': {
+        min: 2,
+        max: 7,
+        critical: 5,
+        severe: 4,
+        moderate: 3,
+        normal: 2
+      },
+      'Emergency': {
+        min: 0.5,
+        max: 2,
+        critical: 1.5,
+        severe: 1,
+        moderate: 0.75,
+        normal: 0.5
+      },
+      'Surgical': {
+        min: 3,
+        max: 10,
+        critical: 8,
+        severe: 6,
+        moderate: 4,
+        normal: 3
+      },
+      'General Ward': {
+        min: 2,
+        max: 8,
+        critical: 6,
+        severe: 4,
+        moderate: 3,
+        normal: 2
+      },
+      'Private Room': {
+        min: 1,
+        max: 10,
+        critical: 7,
+        severe: 5,
+        moderate: 3,
+        normal: 2
+      }
+    };
+    
+    const bedType = bed.type || 'General Ward';
+    const patientCondition = bed.patientCondition || 'normal';
+    const priority = bed.priority || 0;
+    
+    let stayMultiplier = 1;
+    
+    // Adjust based on priority score
+    if (priority >= 70) {
+      stayMultiplier = 1.3; // Higher priority cases stay longer
+    } else if (priority >= 50) {
+      stayMultiplier = 1.15;
+    } else if (priority >= 30) {
+      stayMultiplier = 1.0;
+    } else {
+      stayMultiplier = 0.9;
+    }
+    
+    const stays = averageStays[bedType] || averageStays['General Ward'];
+    let avgStay;
+    
+    switch(patientCondition) {
+      case 'critical':
+        avgStay = stays.critical;
+        break;
+      case 'severe':
+        avgStay = stays.severe;
+        break;
+      case 'moderate':
+        avgStay = stays.moderate;
+        break;
+      default:
+        avgStay = stays.normal;
+    }
+    
+    // Apply priority multiplier
+    avgStay = avgStay * stayMultiplier;
+    
+    const daysAdmitted = calculateDaysAdmitted(bed.admissionDate);
+    const daysRemaining = Math.max(0, Math.ceil(avgStay - daysAdmitted));
+    
+    // Calculate confidence based on how much data we have
+    let confidence = 70; // Base confidence
+    
+    if (bed.patientCondition && bed.patientCondition !== 'normal') {
+      confidence += 5;
+    }
+    if (bed.priority && bed.priority > 0) {
+      confidence += 5;
+    }
+    if (daysAdmitted > 0) {
+      confidence += Math.min(10, daysAdmitted);
+    }
+    if (bed.diagnosis && bed.diagnosis !== '') {
+      confidence += 5;
+    }
+    
+    confidence = Math.min(95, confidence);
+    
+    // Calculate estimated discharge date
+    const estimatedDate = new Date();
+    estimatedDate.setDate(estimatedDate.getDate() + daysRemaining);
+    
+    return {
+      daysRemaining,
+      estimatedDate,
+      confidence,
+      avgStay,
+      daysAdmitted
+    };
+  };
+
+  // Predict bed availability
+  const predictBedAvailability = useCallback(async () => {
+    setPredictionLoading(true);
+    
+    try {
+      const predictions = [];
+      
+      // Get all occupied beds
+      const occupiedBeds = beds.filter(bed => bed.status === 'occupied');
+      
+      for (const bed of occupiedBeds) {
+        const prediction = calculateEstimatedDischarge(bed);
+        
+        // Only include beds that are predicted to be free within the next 48 hours
+        if (prediction.daysRemaining <= 2 && prediction.daysRemaining >= 0) {
+          predictions.push({
+            bedId: bed.bedId,
+            bedNumber: bed.bedNumber,
+            type: bed.type,
+            floor: bed.floor,
+            roomNumber: bed.roomNumber,
+            currentPatient: bed.patientName,
+            patientAge: bed.patientAge,
+            patientCondition: bed.patientCondition,
+            priority: bed.priority,
+            daysRemaining: prediction.daysRemaining,
+            estimatedDate: prediction.estimatedDate,
+            confidence: prediction.confidence,
+            hoursRemaining: Math.round(prediction.daysRemaining * 24),
+            avgStay: prediction.avgStay,
+            daysAdmitted: prediction.daysAdmitted,
+            admissionDate: bed.admissionDate
+          });
+        }
+      }
+      
+      // Sort by soonest available first
+      predictions.sort((a, b) => a.daysRemaining - b.daysRemaining);
+      
+      setBedPredictions(predictions);
+    } catch (error) {
+      console.error('Error predicting bed availability:', error);
+      showNotification('Error generating predictions', 'error');
+    } finally {
+      setPredictionLoading(false);
+    }
+  }, [beds]);
+
+  // Get confidence color
+  const getConfidenceColor = (confidence) => {
+    if (confidence >= 80) return '#10b981';
+    if (confidence >= 60) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  // Get confidence label
+  const getConfidenceLabel = (confidence) => {
+    if (confidence >= 80) return 'High';
+    if (confidence >= 60) return 'Medium';
+    return 'Low';
+  };
+
+  // ==================== EXISTING FUNCTIONS ====================
+
   // Real-time subscription to beds
   useEffect(() => {
     if (!hospitalId) return;
@@ -152,6 +359,13 @@ const BedManagement = () => {
     
     return () => unsubscribe();
   }, [hospitalId, waitingQueue.length, autoAllocate]);
+
+  // Update predictions when beds change
+  useEffect(() => {
+    if (beds.length > 0) {
+      predictBedAvailability();
+    }
+  }, [beds, predictBedAvailability]);
 
   // Load hospital data
   useEffect(() => {
@@ -367,7 +581,6 @@ const BedManagement = () => {
     try {
       const bedRef = doc(db, 'hospitals', hospitalId, 'beds', bed.id);
       
-      // Create clean patient data object with no undefined values
       const updateData = {
         status: 'occupied',
         patientId: `PAT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -380,12 +593,10 @@ const BedManagement = () => {
         allocationReason: patient.allocationReason || 'AI Allocation'
       };
       
-      // Only add contactNumber if it exists and is not empty
       if (patient.contactNumber && patient.contactNumber.trim() !== '') {
         updateData.contactNumber = patient.contactNumber;
       }
       
-      // Only add oxygenLevel if it exists
       if (patient.oxygenLevel) {
         updateData.oxygenLevel = parseInt(patient.oxygenLevel) || 95;
       }
@@ -405,7 +616,6 @@ const BedManagement = () => {
       
       processedPatientIds.current.add(patientKey);
       
-      // Save to patients collection with clean data
       const patientData = {
         name: patient.name || '',
         age: parseInt(patient.age) || 0,
@@ -424,7 +634,6 @@ const BedManagement = () => {
         status: 'admitted'
       };
       
-      // Only add contactNumber if available
       if (patient.contactNumber && patient.contactNumber.trim() !== '') {
         patientData.contactNumber = patient.contactNumber;
       }
@@ -432,7 +641,6 @@ const BedManagement = () => {
       const patientRef = collection(db, 'hospitals', hospitalId, 'patients');
       await addDoc(patientRef, patientData);
       
-      // Remove from waiting queue if exists
       if (patient.id) {
         await deleteDoc(doc(db, 'hospitals', hospitalId, 'waitingQueue', patient.id));
       }
@@ -455,19 +663,15 @@ const BedManagement = () => {
     const allocatedPatients = [];
     
     try {
-      // Get current available beds
       const availableBeds = beds.filter(bed => bed.status === 'available');
       if (availableBeds.length === 0) {
         setIsAllocating(false);
         return;
       }
       
-      // Create a copy of waiting queue sorted by priority (already sorted)
       const queueCopy = [...waitingQueue];
       
-      // Try to allocate as many as possible
       for (const patient of queueCopy) {
-        // Check if still in queue (not already allocated)
         const stillInQueue = waitingQueue.some(p => p.id === patient.id);
         if (!stillInQueue) continue;
         
@@ -490,7 +694,6 @@ const BedManagement = () => {
       
       if (allocatedCount > 0) {
         showNotification(`🤖 Auto-allocated ${allocatedCount} patient(s): ${allocatedPatients.join(', ')}`, 'success');
-        // Reload queue to reflect changes
         await loadWaitingQueue(hospitalId);
       }
       
@@ -510,7 +713,6 @@ const BedManagement = () => {
       return;
     }
     
-    // Check for duplicate in waiting queue
     const existingInQueue = waitingQueue.some(p => 
       p.name === aiPatientForm.name && p.age === aiPatientForm.age
     );
@@ -525,7 +727,6 @@ const BedManagement = () => {
     try {
       const { score: priority, log: priorityLog } = calculatePriorityScore(aiPatientForm);
       
-      // Create clean patient data with no undefined values
       const patientData = {
         name: aiPatientForm.name,
         age: parseInt(aiPatientForm.age) || 0,
@@ -540,7 +741,6 @@ const BedManagement = () => {
         allocationReason: `Priority Score: ${priority} (${priorityLog.join(', ')})`
       };
       
-      // Only add contactNumber if provided
       if (aiPatientForm.contactNumber && aiPatientForm.contactNumber.trim() !== '') {
         patientData.contactNumber = aiPatientForm.contactNumber;
       }
@@ -577,7 +777,6 @@ const BedManagement = () => {
         }
         
       } else {
-        // Add to waiting queue
         const queueRef = collection(db, 'hospitals', hospitalId, 'waitingQueue');
         await addDoc(queueRef, {
           ...patientData,
@@ -600,7 +799,7 @@ const BedManagement = () => {
     }
   }, [aiPatientForm, hospitalId, calculatePriorityScore, aiAllocateBed, allocatePatientToBed, waitingQueue, loadWaitingQueue]);
 
-  // Bulk create beds with dynamic floors
+  // Bulk create beds
   const bulkCreateBeds = useCallback(async () => {
     if (!bulkBedForm.roomStart || !bulkBedForm.roomEnd) {
       showNotification('Please enter room range', 'warning');
@@ -683,7 +882,6 @@ const BedManagement = () => {
       });
       setShowCustomFloorInput(false);
       
-      // AUTO-ALLOCATE: After creating new beds, try to allocate from queue
       if (autoAllocate && waitingQueue.length > 0) {
         setTimeout(() => autoAllocateFromQueue(), 500);
       }
@@ -717,7 +915,6 @@ const BedManagement = () => {
       setShowDischargeModal(false);
       setSelectedBed(null);
       
-      // AUTO-ALLOCATE: After discharge, try to allocate from queue
       if (autoAllocate && waitingQueue.length > 0) {
         setTimeout(() => autoAllocateFromQueue(), 100);
       }
@@ -793,7 +990,7 @@ const BedManagement = () => {
     }
   }, [selectedBed, targetBed, hospitalId]);
 
-  // Remove from queue manually
+  // Remove from queue
   const removeFromQueue = useCallback(async (patientId) => {
     if (window.confirm('Remove this patient from waiting queue?')) {
       try {
@@ -842,7 +1039,6 @@ const BedManagement = () => {
       if (bed.status === 'available') byType[bed.type].available++;
       else byType[bed.type].occupied++;
       
-      // Track floors
       const floor = bed.floor || '1';
       if (!byType[bed.type].floors[floor]) {
         byType[bed.type].floors[floor] = { total: 0, available: 0, occupied: 0 };
@@ -1117,6 +1313,197 @@ const BedManagement = () => {
                     🤖 Force Allocate Now
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bed Availability Prediction Modal */}
+      {showPredictionsModal && (
+        <div className="modal-overlay" onClick={() => setShowPredictionsModal(false)}>
+          <div className="modal-content prediction-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+            <div className="modal-header">
+              <h2>🔮 Bed Availability Predictions</h2>
+              <button className="modal-close" onClick={() => setShowPredictionsModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {predictionLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <div className="loading-spinner-small" style={{ margin: '0 auto 15px' }}></div>
+                  <p>Analyzing patient data and generating predictions...</p>
+                </div>
+              ) : bedPredictions.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
+                  <div className="empty-icon" style={{ fontSize: '48px', marginBottom: '15px' }}>🔮</div>
+                  <h3>No Predictions Available</h3>
+                  <p>Currently, no beds are predicted to be available in the next 48 hours.</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '10px' }}>
+                    This could mean all patients have just been admitted or we need more data.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ 
+                    background: 'linear-gradient(135deg, #fef3c7, #fde68a)', 
+                    padding: '15px', 
+                    borderRadius: '12px', 
+                    marginBottom: '20px',
+                    borderLeft: '4px solid #f59e0b'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '24px' }}>📊</span>
+                      <div>
+                        <strong>AI Prediction Summary</strong>
+                        <p style={{ margin: '5px 0 0 0', fontSize: '14px' }}>
+                          {bedPredictions.length} bed(s) predicted to become available in the next 48 hours
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="predictions-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    {bedPredictions.map((prediction, idx) => (
+                      <div key={idx} className="prediction-card" style={{
+                        background: 'white',
+                        borderRadius: '12px',
+                        padding: '15px',
+                        border: '1px solid #e2e8f0',
+                        transition: 'all 0.3s ease',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: 0, 
+                          left: 0, 
+                          width: '4px', 
+                          height: '100%',
+                          background: prediction.hoursRemaining <= 12 ? '#10b981' : '#f59e0b'
+                        }}></div>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{prediction.type === 'ICU' ? '💙' : prediction.type === 'Emergency' ? '🚨' : prediction.type === 'Surgical' ? '💚' : '🛏️'}</span>
+                              {prediction.bedId} ({prediction.type})
+                            </h3>
+                            <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                              Room {prediction.roomNumber}, Floor {prediction.floor}
+                            </p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ 
+                              background: prediction.hoursRemaining <= 12 ? '#d1fae5' : '#fef3c7',
+                              color: prediction.hoursRemaining <= 12 ? '#065f46' : '#92400e',
+                              padding: '4px 12px',
+                              borderRadius: '20px',
+                              fontWeight: '600',
+                              fontSize: '14px'
+                            }}>
+                              {prediction.hoursRemaining <= 24 
+                                ? `⏰ ${prediction.hoursRemaining} hours` 
+                                : `📅 ${Math.ceil(prediction.daysRemaining)} day${prediction.daysRemaining > 1 ? 's' : ''}`}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                          <div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>Current Patient</div>
+                            <div style={{ fontWeight: '600', fontSize: '14px' }}>{prediction.currentPatient}</div>
+                            <div style={{ fontSize: '12px', color: '#475569' }}>
+                              Age: {prediction.patientAge} | Condition: {prediction.patientCondition || 'Normal'}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>Admission Details</div>
+                            <div style={{ fontSize: '13px' }}>
+                              Admitted: {prediction.daysAdmitted} day{prediction.daysAdmitted !== 1 ? 's' : ''} ago
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#475569' }}>
+                              Avg Stay: {prediction.avgStay} days
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>Prediction Confidence</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                              <div style={{ 
+                                flex: 1, 
+                                height: '6px', 
+                                background: '#e2e8f0', 
+                                borderRadius: '3px',
+                                overflow: 'hidden'
+                              }}>
+                                <div style={{ 
+                                  width: `${prediction.confidence}%`, 
+                                  height: '100%', 
+                                  background: getConfidenceColor(prediction.confidence),
+                                  borderRadius: '3px'
+                                }}></div>
+                              </div>
+                              <span style={{ 
+                                fontSize: '12px', 
+                                fontWeight: '600',
+                                color: getConfidenceColor(prediction.confidence)
+                              }}>
+                                {prediction.confidence}% ({getConfidenceLabel(prediction.confidence)})
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div style={{ 
+                          background: '#f8fafc', 
+                          padding: '10px', 
+                          borderRadius: '8px', 
+                          marginTop: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '10px'
+                        }}>
+                          <div>
+                            <span style={{ fontSize: '13px', color: '#475569' }}>
+                              📍 Estimated availability: 
+                              <strong style={{ color: prediction.hoursRemaining <= 12 ? '#10b981' : '#f59e0b', marginLeft: '5px' }}>
+                                {prediction.estimatedDate.toLocaleDateString()} at {prediction.estimatedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </strong>
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#8b5cf6' }}>
+                            🤖 Based on {prediction.priority ? `priority score ${prediction.priority}` : 'admission patterns'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div style={{ marginTop: '20px', padding: '12px', background: '#f1f5f9', borderRadius: '8px', fontSize: '13px' }}>
+                    <strong>💡 How predictions work:</strong>
+                    <ul style={{ margin: '8px 0 0 20px', fontSize: '12px', color: '#475569' }}>
+                      <li>Based on average stay times for each bed type (ICU: 2-7 days, Emergency: 0.5-2 days, etc.)</li>
+                      <li>Adjusted by patient condition (critical, severe, moderate, normal)</li>
+                      <li>Priority scores influence expected length of stay</li>
+                      <li>Confidence increases with more admission data</li>
+                      <li>Only shows beds predicted to be free in next 48 hours</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+              
+              <div className="form-actions" style={{ marginTop: '20px' }}>
+                <button className="cancel-btn" onClick={() => setShowPredictionsModal(false)}>Close</button>
+                <button 
+                  className="submit-btn" 
+                  onClick={() => {
+                    predictBedAvailability();
+                  }}
+                  disabled={predictionLoading}
+                >
+                  {predictionLoading ? 'Refreshing...' : '🔄 Refresh Predictions'}
+                </button>
               </div>
             </div>
           </div>
@@ -1498,6 +1885,39 @@ const BedManagement = () => {
                 <span className="queue-badge">{waitingQueue.length}</span>
               )}
             </button>
+            <button 
+              className="prediction-action" 
+              onClick={() => {
+                predictBedAvailability();
+                setShowPredictionsModal(true);
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                color: 'white',
+                padding: '10px 20px',
+                borderRadius: '12px',
+                border: 'none',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>🔮</span>
+              <span>Predict Available Beds</span>
+              {bedPredictions.length > 0 && (
+                <span style={{
+                  background: '#ef4444',
+                  borderRadius: '20px',
+                  padding: '2px 8px',
+                  fontSize: '12px',
+                  marginLeft: '4px'
+                }}>
+                  {bedPredictions.length}
+                </span>
+              )}
+            </button>
             <button className="criteria-action" onClick={() => setShowCriteriaModal(true)} style={{
               background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
               color: 'white'
@@ -1741,6 +2161,42 @@ const BedManagement = () => {
             </div>
           )}
 
+          {/* Prediction Quick Card */}
+          {bedPredictions.length > 0 && (
+            <div 
+              className="prediction-summary" 
+              onClick={() => {
+                predictBedAvailability();
+                setShowPredictionsModal(true);
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #f3e8ff, #e9d5ff)',
+                borderRadius: '12px',
+                padding: '15px',
+                marginBottom: '20px',
+                cursor: 'pointer',
+                transition: 'transform 0.2s ease',
+                border: '1px solid #c4b5fd'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '14px', color: '#7c3aed' }}>🔮 Bed Predictions</h3>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#6d28d9' }}>
+                    {bedPredictions.length} bed{bedPredictions.length !== 1 ? 's' : ''} soon
+                  </div>
+                </div>
+                <div style={{ fontSize: '32px' }}>📊</div>
+              </div>
+              <div style={{ marginTop: '10px', fontSize: '12px', color: '#5b21b6' }}>
+                {bedPredictions[0]?.type} bed free in {bedPredictions[0]?.hoursRemaining} hours
+              </div>
+              <div style={{ fontSize: '11px', marginTop: '8px', color: '#7c3aed' }}>
+                Click for detailed predictions
+              </div>
+            </div>
+          )}
+
           {/* AI Status */}
           <div className="ai-status">
             <h3>🤖 AI System Status</h3>
@@ -1756,6 +2212,10 @@ const BedManagement = () => {
               <div className="status-item">
                 <span className="status-dot active"></span>
                 <span>Real-time Sync: Active</span>
+              </div>
+              <div className="status-item">
+                <span className={`status-dot ${bedPredictions.length > 0 ? 'active' : ''}`}></span>
+                <span>Prediction Engine: {bedPredictions.length > 0 ? `${bedPredictions.length} predictions` : 'Idle'}</span>
               </div>
               {isAllocating && (
                 <div className="status-item">
@@ -1774,6 +2234,21 @@ const BedManagement = () => {
             </button>
             <button onClick={() => setShowBulkForm(true)} className="quick-action-btn">
               <span>🏗️</span> Bulk Create Beds
+            </button>
+            <button 
+              onClick={() => {
+                predictBedAvailability();
+                setShowPredictionsModal(true);
+              }} 
+              className="quick-action-btn"
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white' }}
+            >
+              <span>🔮</span> Predict Bed Availability
+              {bedPredictions.filter(p => p.daysRemaining <= 1).length > 0 && (
+                <span style={{ marginLeft: 'auto', background: 'white', color: '#7c3aed', padding: '2px 8px', borderRadius: '12px', fontSize: '11px' }}>
+                  {bedPredictions.filter(p => p.daysRemaining <= 1).length} soon
+                </span>
+              )}
             </button>
             {waitingQueue.length > 0 && (
               <button onClick={() => autoAllocateFromQueue()} className="quick-action-btn" style={{ background: '#10b981', color: 'white' }}>

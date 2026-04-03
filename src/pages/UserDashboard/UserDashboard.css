@@ -1257,3 +1257,101 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Modal Styles for Video Call and Chat */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  position: relative;
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 1200px;
+  height: 80vh;
+  overflow: hidden;
+}
+
+.video-call-modal {
+  width: 90%;
+  height: 85vh;
+}
+
+.chat-modal {
+  width: 400px;
+  height: 600px;
+  max-width: 90%;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  z-index: 10;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Unread Badge */
+.unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.unread-count {
+  margin-left: 5px;
+  background: #e74c3c;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 10px;
+  color: white;
+}
+
+/* Video Call and Chat Buttons */
+.video-call-btn, .chat-btn {
+  transition: all 0.3s ease;
+}
+
+.video-call-btn:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+.chat-btn:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
