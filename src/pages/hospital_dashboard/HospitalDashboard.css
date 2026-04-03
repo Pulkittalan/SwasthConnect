@@ -1756,3 +1756,282 @@
     min-width: 120px;
   }
 }
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Modal Content */
+.modal-content {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 24px;
+  padding: 32px;
+  max-width: 550px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: slideUp 0.3s ease-out;
+}
+
+.modal-content h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  border-left: 4px solid #0d9488;
+  padding-left: 16px;
+}
+
+/* Modal Form */
+.modal-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  background: white;
+  font-family: inherit;
+}
+
+.modal-content input:focus,
+.modal-content select:focus {
+  outline: none;
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+.modal-content input:hover,
+.modal-content select:hover {
+  border-color: #cbd5e1;
+}
+
+.modal-content input::placeholder {
+  color: #94a3b8;
+}
+
+/* Form Actions in Modal */
+.modal-content .form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.modal-content button[type="submit"],
+.modal-content button[type="button"] {
+  flex: 1;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-content button[type="submit"] {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  color: white;
+}
+
+.modal-content button[type="submit"]:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(13, 148, 136, 0.3);
+}
+
+.modal-content button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-content button[type="button"] {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.modal-content button[type="button"]:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+/* Scrollbar Styling for Modal */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Responsive Design for Modal */
+@media (max-width: 640px) {
+  .modal-content {
+    padding: 24px;
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .modal-content h3 {
+    font-size: 1.25rem;
+    margin-bottom: 20px;
+  }
+
+  .modal-content input,
+  .modal-content select {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+  }
+
+  .modal-content .form-actions {
+    flex-direction: column;
+  }
+
+  .modal-content button[type="submit"],
+  .modal-content button[type="button"] {
+    padding: 10px 20px;
+  }
+}
+
+/* Optional: Add Doctor Button styling (already exists but ensure consistency) */
+.add-doctor-btn {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-doctor-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(13, 148, 136, 0.3);
+}
+
+/* Error and Success Messages inside Modal */
+.modal-content .error-message,
+.modal-content .success-message {
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.modal-content .error-message {
+  background: #fee2e2;
+  color: #991b1b;
+  border-left: 4px solid #ef4444;
+}
+
+.modal-content .success-message {
+  background: #d1fae5;
+  color: #065f46;
+  border-left: 4px solid #10b981;
+}
+
+/* Loading state for submit button */
+.modal-content button[type="submit"]:disabled {
+  position: relative;
+  cursor: not-allowed;
+}
+
+.modal-content button[type="submit"]:disabled::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  right: 20px;
+  margin-top: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Form Grid for better layout if needed */
+.modal-content .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.modal-content .form-group-full {
+  grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+  .modal-content .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .modal-content .form-group-full {
+    grid-column: span 1;
+  }
+}

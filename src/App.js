@@ -14,6 +14,9 @@ import AdminLogin from './pages/admin/AdminLogin';
 import DoctorDashboard from './pages/doctor_dashboard/DoctorDashboard';
 import Unauthorized from './pages/Unauthorized';
 import HospitalProtectedRoute from './components/HospitalProtectedRoute';
+// Add these imports at the top
+import HospitalDoctorDashboard from './pages/doctor_dashboard/HospitalDoctorDashboard';
+import IndependentDoctorDashboard from './pages/doctor_dashboard/IndependentDoctorDashboard';
 
 
 
@@ -39,6 +42,23 @@ function App() {
             element={
               <ProtectedRoute>
                 <DoctorDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/hospital-doctor-dashboard"
+            element={
+              <ProtectedRoute>
+                <HospitalDoctorDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/independent-doctor-dashboard"
+            element={
+              <ProtectedRoute>
+                <IndependentDoctorDashboard />
               </ProtectedRoute>
             }
           />

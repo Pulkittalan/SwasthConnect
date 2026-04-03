@@ -411,7 +411,7 @@ const Login = () => {
       localStorage.setItem("doctorType", doctorData.doctorType); // "hospital" or "independent"
       localStorage.setItem("doctorEmail", doctorData.email);
       localStorage.setItem("doctorPhoto", doctorData.photo_url || "");
-      
+
       if (doctorData.doctorType === "hospital") {
         localStorage.setItem("hospitalId", doctorData.hospitalId);
         localStorage.setItem("hospitalName", doctorData.hospitalName);
@@ -422,10 +422,10 @@ const Login = () => {
       }
 
       alert("✅ Doctor login successful!");
-      
+
       // Redirect based on doctor type
       if (doctorData.doctorType === "hospital") {
-        window.location.href = "/doctor-dashboard";
+        window.location.href = "/hospital-doctor-dashboard";
       } else {
         window.location.href = "/independent-doctor-dashboard";
       }

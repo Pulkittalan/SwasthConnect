@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { db } from "../../firebase/firebase";
+import { db,auth, storage } from "../../firebase/firebase";
+
 import {
   doc,
   getDoc,
@@ -12,7 +13,12 @@ import {
   orderBy,
   updateDoc,
   onSnapshot,
+  setDoc,
 } from "firebase/firestore";
+// Add these imports for Authentication and Storage
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
 import { useParams, useNavigate } from "react-router-dom";
 import { Line, Bar, Pie, Doughnut } from "react-chartjs-2";
 import {
@@ -78,10 +84,12 @@ const HospitalDashboard = () => {
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
 
+  
   // New patient form data
   const [newPatient, setNewPatient] = useState({
     name: "",
@@ -103,20 +111,28 @@ const HospitalDashboard = () => {
 
   // New doctor form data
   const [newDoctor, setNewDoctor] = useState({
-    name: "",
-    specialization: "",
-    qualification: "",
-    experience: "",
-    contact: "",
-    email: "",
-    availability: "available",
-    consultationFee: "",
-    department: "",
-    joiningDate: new Date().toISOString().split("T")[0],
-    address: "",
-    doctorId: "",
-  });
-
+  name: "",
+  specialization: "",
+  qualification: "MBBS",
+  experience: "",
+  contact: "",
+  email: "",
+  availability: "available",
+  consultationFee: "",
+  department: "",
+  joiningDate: new Date().toISOString().split("T")[0],
+  address: "",
+  doctorId: "",
+  password: "",
+  gender: "",
+  dob: "",
+  registrationNo: "",
+  opdDays: ["Monday", "Wednesday", "Friday"],
+  opdTime: "09:00-17:00",
+  bio: "",
+  onlineFee: "",
+  doctorPhoto: null,
+});
   // New appointment form data
   const [newAppointment, setNewAppointment] = useState({
     patientName: "",
@@ -906,81 +922,156 @@ const HospitalDashboard = () => {
   };
 
   const handleAddDoctor = async () => {
-    if (!newDoctor.name || !newDoctor.specialization || !newDoctor.contact) {
-      setFormError("Please fill in all required fields");
-      return;
-    }
+  if (!newDoctor.name || !newDoctor.specialization || !newDoctor.contact) {
+    setFormError("Please fill in all required fields");
+    return;
+  }
 
-    setFormSubmitting(true);
-    setFormError("");
-    setFormSuccess("");
+  setFormSubmitting(true);
+  setFormError("");
+  setFormSuccess("");
 
+  try {
+    const doctorId = newDoctor.doctorId || generateId("D");
+
+    // Create user in Firebase Authentication
+    const email = newDoctor.email || `${doctorId}@temp.com`;
+    const password = newDoctor.password || `Doctor@${doctorId}`;
+    
+    let userCredential;
     try {
-      const doctorId = newDoctor.doctorId || generateId("D");
-
-      const doctorData = {
-        doctorId: doctorId,
-        name: newDoctor.name,
-        specialization: newDoctor.specialization,
-        qualification: newDoctor.qualification || "",
-        experience: parseInt(newDoctor.experience) || 0,
-        contact: newDoctor.contact,
-        email: newDoctor.email || "",
-        availability: newDoctor.availability || "available",
-        consultationFee: parseFloat(newDoctor.consultationFee) || 0,
-        department: newDoctor.department || "",
-        joiningDate:
-          newDoctor.joiningDate || new Date().toISOString().split("T")[0],
-        address: newDoctor.address || "",
-        patientsCount: 0,
-        rating: 4.5,
-        createdAt: serverTimestamp(),
-        lastUpdated: serverTimestamp(),
-        hospitalId: hospitalId,
-        city: hospitalData?.city || "",
-        state: hospitalData?.state || "",
-        status: "active",
-      };
-
-      const doctorsRef = collection(db, "hospitals", hospitalId, "doctors");
-      const docRef = await addDoc(doctorsRef, doctorData);
-
-      const newDoctorWithId = {
-        id: docRef.id,
-        ...doctorData,
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      };
-
-      setDoctors((prev) => [...prev, newDoctorWithId]);
-      setFormSuccess("Doctor added successfully!");
-
-      setNewDoctor({
-        name: "",
-        specialization: "",
-        qualification: "",
-        experience: "",
-        contact: "",
-        email: "",
-        availability: "available",
-        consultationFee: "",
-        department: "",
-        joiningDate: new Date().toISOString().split("T")[0],
-        address: "",
-        doctorId: "",
-      });
-
-      setTimeout(() => {
-        setShowDoctorForm(false);
-        setFormSuccess("");
-      }, 2000);
-    } catch (error) {
-      console.error("Error adding doctor:", error);
-      setFormError("Failed to add doctor: " + error.message);
-    } finally {
-      setFormSubmitting(false);
+      userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    } catch (authError) {
+      // If user already exists, we can still proceed
+      console.warn("Auth user may already exist:", authError);
     }
-  };
+
+    let photoUrl = "";
+    if (newDoctor.doctorPhoto) {
+      const photoRef = ref(storage, `doctors/${doctorId}/profile`);
+      await uploadBytes(photoRef, newDoctor.doctorPhoto);
+      photoUrl = await getDownloadURL(photoRef);
+    }
+
+    // Create doctor object for root 'doctors' collection (for login)
+    const rootDoctorData = {
+      uid: userCredential?.user?.uid || `temp_${doctorId}`,
+      doctorId: doctorId,
+      name: newDoctor.name,
+      email: email,
+      phone: newDoctor.contact,
+      gender: newDoctor.gender || "",
+      dob: newDoctor.dob || "",
+      
+      // Professional fields
+      specialization: newDoctor.specialization,
+      qualification: newDoctor.qualification || "MBBS",
+      registration_no: newDoctor.registrationNo || "",
+      experience_years: parseInt(newDoctor.experience) || 0,
+      consultation_fee: parseInt(newDoctor.consultationFee) || 0,
+      online_fee: parseInt(newDoctor.onlineFee) || 0,
+      opd_days: newDoctor.opdDays || ["Monday", "Wednesday", "Friday"],
+      opd_time: newDoctor.opdTime || "09:00-17:00",
+      bio: newDoctor.bio || "",
+      
+      // Media
+      photo_url: photoUrl,
+      
+      // Type identification
+      doctorType: "hospital",
+      
+      // Hospital association
+      hospitalId: hospitalId,
+      hospitalName: hospitalData?.name || "",
+      department: newDoctor.department || newDoctor.specialization,
+      
+      // Status - Auto-approved since hospital admin creates them
+      status: "approved",
+      isActive: true,
+      
+      // Timestamps
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
+      approvedBy: hospitalData?.email || "hospital_admin",
+      lastLogin: null,
+      
+      // Password hint (not actual password, just for reference)
+      _passwordHint: password,
+    };
+
+    // Save to root 'doctors' collection (for login)
+    await setDoc(doc(db, "doctors", doctorId), rootDoctorData);
+
+    // Also save to hospital's subcollection for organization
+    const hospitalDoctorData = {
+      doctorId: doctorId,
+      name: newDoctor.name,
+      specialization: newDoctor.specialization,
+      qualification: newDoctor.qualification || "MBBS",
+      experience: parseInt(newDoctor.experience) || 0,
+      contact: newDoctor.contact,
+      email: email,
+      availability: "available",
+      consultationFee: parseInt(newDoctor.consultationFee) || 0,
+      department: newDoctor.department || newDoctor.specialization,
+      joiningDate: newDoctor.joiningDate || new Date().toISOString().split("T")[0],
+      address: newDoctor.address || "",
+      status: "active",
+      rating: 4.5,
+      patientsCount: 0,
+      photo_url: photoUrl,
+      createdAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const doctorsRef = collection(db, "hospitals", hospitalId, "doctors");
+    const docRef = await addDoc(doctorsRef, hospitalDoctorData);
+
+    const newDoctorWithId = {
+      id: docRef.id,
+      ...hospitalDoctorData,
+    };
+
+    setDoctors((prev) => [...prev, newDoctorWithId]);
+    setFormSuccess(`Doctor added successfully! Login credentials: ID: ${doctorId}, Password: ${password}`);
+
+    // Reset form
+    setNewDoctor({
+      name: "",
+      specialization: "",
+      qualification: "MBBS",
+      experience: "",
+      contact: "",
+      email: "",
+      availability: "available",
+      consultationFee: "",
+      department: "",
+      joiningDate: new Date().toISOString().split("T")[0],
+      address: "",
+      doctorId: "",
+      password: "",
+      gender: "",
+      dob: "",
+      registrationNo: "",
+      opdDays: ["Monday", "Wednesday", "Friday"],
+      opdTime: "09:00-17:00",
+      bio: "",
+      onlineFee: "",
+      doctorPhoto: null,
+    });
+
+    setTimeout(() => {
+      setShowAddDoctorModal(false);
+      setFormSuccess("");
+    }, 5000);
+  } catch (error) {
+    console.error("Error adding doctor:", error);
+    setFormError("Failed to add doctor: " + error.message);
+  } finally {
+    setFormSubmitting(false);
+  }
+};
 
   const handleAddAppointment = async () => {
     if (
@@ -2712,187 +2803,400 @@ const HospitalDashboard = () => {
                     <button
                       className="edit-beds-btn"
                       onClick={() => {
-                        setShowDoctorForm(!showDoctorForm);
+                        setShowAddDoctorModal(true);
                         setFormError("");
                         setFormSuccess("");
                       }}
                     >
                       <span>➕</span>
-                      <span>
-                        {showDoctorForm ? "Cancel" : "Add New Doctor"}
-                      </span>
+                      <span>Add New Doctor</span>
                     </button>
                   </div>
                 </div>
 
-                {showDoctorForm && (
-                  <div className="doctor-form-container">
-                    <h3 style={{ marginBottom: "20px", color: "#0d9488" }}>
-                      Add New Doctor
-                    </h3>
-
-                    {formError && (
-                      <div
-                        style={{
-                          background: "#fee2e2",
-                          color: "#991b1b",
-                          padding: "12px",
-                          borderRadius: "8px",
-                          marginBottom: "20px",
+                {/* Add Doctor Modal */}
+                {showAddDoctorModal && (
+                  <div className="modal-overlay">
+                    <div className="modal-content">
+                      <h3>Add New Doctor to {hospitalData?.name}</h3>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleAddDoctor();
                         }}
                       >
-                        {typeof formError === "string"
-                          ? formError
-                          : "An error occurred"}
-                      </div>
-                    )}
+                        <div className="form-grid">
+                          <div className="form-group">
+                            <label>Doctor ID *</label>
+                            <input
+                              type="text"
+                              placeholder="Doctor ID"
+                              value={newDoctor.doctorId}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  doctorId: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Password *</label>
+                            <input
+                              type="text"
+                              placeholder="Password (auto-generated if empty)"
+                              value={newDoctor.password}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  password: e.target.value,
+                                })
+                              }
+                            />
+                            <small style={{ color: "#64748b" }}>
+                              Leave empty to auto-generate
+                            </small>
+                          </div>
+                          <div className="form-group">
+                            <label>Full Name *</label>
+                            <input
+                              type="text"
+                              placeholder="Full Name"
+                              value={newDoctor.name}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  name: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Email *</label>
+                            <input
+                              type="email"
+                              placeholder="Email"
+                              value={newDoctor.email}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  email: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Gender</label>
+                            <select
+                              value={newDoctor.gender}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  gender: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="">Select Gender</option>
+                              <option value="male">Male</option>
+                              <option value="female">Female</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Date of Birth</label>
+                            <input
+                              type="date"
+                              value={newDoctor.dob}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  dob: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Specialization *</label>
+                            <select
+                              value={newDoctor.specialization}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  specialization: e.target.value,
+                                })
+                              }
+                              required
+                            >
+                              <option value="">Select Specialization</option>
+                              <option value="Cardiology">Cardiology</option>
+                              <option value="Neurology">Neurology</option>
+                              <option value="Orthopedics">Orthopedics</option>
+                              <option value="Pediatrics">Pediatrics</option>
+                              <option value="Dermatology">Dermatology</option>
+                              <option value="Radiology">Radiology</option>
+                              <option value="Surgery">Surgery</option>
+                              <option value="Gynecology">Gynecology</option>
+                              <option value="ENT">ENT</option>
+                              <option value="Ophthalmology">
+                                Ophthalmology
+                              </option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Qualification</label>
+                            <select
+                              value={newDoctor.qualification}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  qualification: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="MBBS">MBBS</option>
+                              <option value="MD">MD</option>
+                              <option value="MS">MS</option>
+                              <option value="DNB">DNB</option>
+                              <option value="DM">DM</option>
+                              <option value="MCh">MCh</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Department *</label>
+                            <input
+                              type="text"
+                              placeholder="Department"
+                              value={newDoctor.department}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  department: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Registration Number</label>
+                            <input
+                              type="text"
+                              placeholder="Medical Council Registration No"
+                              value={newDoctor.registrationNo}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  registrationNo: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Years of Experience</label>
+                            <input
+                              type="number"
+                              placeholder="Years"
+                              value={newDoctor.experience}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  experience: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Phone *</label>
+                            <input
+                              type="text"
+                              placeholder="Phone Number"
+                              value={newDoctor.contact}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  contact: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Consultation Fee *</label>
+                            <input
+                              type="number"
+                              placeholder="Consultation Fee (₹)"
+                              value={newDoctor.consultationFee}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  consultationFee: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Online Fee</label>
+                            <input
+                              type="number"
+                              placeholder="Online Consultation Fee (₹)"
+                              value={newDoctor.onlineFee}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  onlineFee: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>OPD Time</label>
+                            <input
+                              type="text"
+                              placeholder="e.g., 09:00-17:00"
+                              value={newDoctor.opdTime}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  opdTime: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Address</label>
+                            <textarea
+                              placeholder="Address"
+                              value={newDoctor.address}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  address: e.target.value,
+                                })
+                              }
+                              rows="2"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Bio / About</label>
+                            <textarea
+                              placeholder="Short bio about the doctor"
+                              value={newDoctor.bio}
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  bio: e.target.value,
+                                })
+                              }
+                              rows="2"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Profile Photo</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                setNewDoctor({
+                                  ...newDoctor,
+                                  doctorPhoto: e.target.files[0],
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
 
-                    {formSuccess && (
-                      <div
-                        style={{
-                          background: "#d1fae5",
-                          color: "#065f46",
-                          padding: "12px",
-                          borderRadius: "8px",
-                          marginBottom: "20px",
-                        }}
-                      >
-                        {typeof formSuccess === "string"
-                          ? formSuccess
-                          : "Success"}
-                      </div>
-                    )}
+                        <div className="form-group">
+                          <label>OPD Days</label>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "10px",
+                            }}
+                          >
+                            {[
+                              "Monday",
+                              "Tuesday",
+                              "Wednesday",
+                              "Thursday",
+                              "Friday",
+                              "Saturday",
+                              "Sunday",
+                            ].map((day) => (
+                              <label
+                                key={day}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={newDoctor.opdDays.includes(day)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setNewDoctor({
+                                        ...newDoctor,
+                                        opdDays: [...newDoctor.opdDays, day],
+                                      });
+                                    } else {
+                                      setNewDoctor({
+                                        ...newDoctor,
+                                        opdDays: newDoctor.opdDays.filter(
+                                          (d) => d !== day,
+                                        ),
+                                      });
+                                    }
+                                  }}
+                                />
+                                {day}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
 
-                    <div className="form-grid">
-                      <div className="form-group">
-                        <label>Doctor Name *</label>
-                        <input
-                          type="text"
-                          name="name"
-                          value={newDoctor.name}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter doctor name"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Specialization *</label>
-                        <input
-                          type="text"
-                          name="specialization"
-                          value={newDoctor.specialization}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter specialization"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Qualification</label>
-                        <input
-                          type="text"
-                          name="qualification"
-                          value={newDoctor.qualification}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter qualification"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Experience (years)</label>
-                        <input
-                          type="number"
-                          name="experience"
-                          value={newDoctor.experience}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter experience"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Contact Number *</label>
-                        <input
-                          type="text"
-                          name="contact"
-                          value={newDoctor.contact}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter contact number"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Email</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={newDoctor.email}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter email"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Address</label>
-                        <input
-                          type="text"
-                          name="address"
-                          value={newDoctor.address}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter address"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Department</label>
-                        <input
-                          type="text"
-                          name="department"
-                          value={newDoctor.department}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter department"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Consultation Fee (₹)</label>
-                        <input
-                          type="number"
-                          name="consultationFee"
-                          value={newDoctor.consultationFee}
-                          onChange={handleDoctorInputChange}
-                          placeholder="Enter consultation fee"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Availability</label>
-                        <select
-                          name="availability"
-                          value={newDoctor.availability}
-                          onChange={handleDoctorInputChange}
-                        >
-                          <option value="available">Available</option>
-                          <option value="busy">Busy</option>
-                          <option value="on-leave">On Leave</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label>Joining Date</label>
-                        <input
-                          type="date"
-                          name="joiningDate"
-                          value={newDoctor.joiningDate}
-                          onChange={handleDoctorInputChange}
-                        />
-                      </div>
-                    </div>
-                    <div className="form-actions">
-                      <button
-                        className="cancel-btn"
-                        onClick={() => setShowDoctorForm(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="submit-btn"
-                        onClick={handleAddDoctor}
-                        disabled={formSubmitting}
-                      >
-                        {formSubmitting ? "Adding..." : "Add Doctor"}
-                      </button>
+                        {formError && (
+                          <div
+                            className="error-message"
+                            style={{ color: "red", marginBottom: "10px" }}
+                          >
+                            {formError}
+                          </div>
+                        )}
+
+                        {formSuccess && (
+                          <div
+                            className="success-message"
+                            style={{
+                              color: "green",
+                              marginBottom: "10px",
+                              whiteSpace: "pre-wrap",
+                            }}
+                          >
+                            {formSuccess}
+                          </div>
+                        )}
+
+                        <div className="form-actions">
+                          <button type="submit" disabled={formSubmitting}>
+                            {formSubmitting ? "Adding..." : "Add Doctor"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddDoctorModal(false);
+                              setFormError("");
+                              setFormSuccess("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </div>
                 )}

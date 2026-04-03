@@ -1,0 +1,24 @@
+.independent-doctor-dashboard {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.independent-doctor-dashboard .dashboard-header {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+}
+
+.independent-doctor-dashboard .independent-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.independent-doctor-dashboard .clinic-name {
+  font-size: 0.9rem;
+  color: #ffd700;
+  margin-top: 5px;
+}
