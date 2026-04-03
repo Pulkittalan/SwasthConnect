@@ -472,7 +472,7 @@ const Login = () => {
       localStorage.setItem("hospitalLogo", hospitalData.logo_url || "/images/default-avatar.png");
 
       alert("✅ Hospital login successful!");
-      navigate(`/#/dashboard/${formData.hospitalId}`);
+      navigate(`/dashboard/${formData.hospitalId}`);
     } catch (error) {
       console.error("Login error:", error);
       setError(error.message);
@@ -585,7 +585,7 @@ const Login = () => {
 
   // Admin Login Button Handler
   const handleAdminLogin = () => {
-    navigate("#/admin-login");
+    navigate("/admin-login");
   };
 
   return (
@@ -598,7 +598,7 @@ const Login = () => {
 
       <div className="login-container">
         <div className="image-container">
-          <Link to="#/">
+          <Link to="/">
             <img src="/images/logo.png" alt="Dashboard" />
           </Link>
           <h2>Welcome to SwasthConnect</h2>

@@ -19,6 +19,14 @@ const HospitalDashboard = () => {
   const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
   const [showEditDoctorModal, setShowEditDoctorModal] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [activeTab, setActiveTab] = useState('doctors');
+  const [stats, setStats] = useState({
+    totalDoctors: 0,
+    activeDoctors: 0,
+    totalAppointments: 0,
+    totalPatients: 0,
+    totalRevenue: 0
+  });
   const [newDoctor, setNewDoctor] = useState({
     doctorId: '',
     name: '',
@@ -67,6 +75,7 @@ const HospitalDashboard = () => {
         if (hospitalSnap.exists()) {
           setHospitalData(hospitalSnap.data());
           await fetchDoctors(hospitalId);
+          await fetchStats(hospitalId);
         }
       } catch (error) {
         console.error('Error fetching hospital data:', error);
@@ -93,8 +102,48 @@ const HospitalDashboard = () => {
         ...doc.data()
       }));
       setDoctors(doctorsList);
+      return doctorsList;
     } catch (error) {
       console.error('Error fetching doctors:', error);
+      return [];
+    }
+  };
+
+  // Fetch hospital stats
+  const fetchStats = async (hospitalId) => {
+    try {
+      const doctorsList = await fetchDoctors(hospitalId);
+      const totalDoctors = doctorsList.length;
+      const activeDoctors = doctorsList.filter(d => d.isActive === true).length;
+      
+      // Fetch appointments for all doctors
+      let totalAppointments = 0;
+      let totalPatients = new Set();
+      let totalRevenue = 0;
+      
+      for (const doctor of doctorsList) {
+        const appointmentsRef = collection(db, 'appointments');
+        const q = query(appointmentsRef, where('doctorId', '==', doctor.doctorId));
+        const snapshot = await getDocs(q);
+        const appointments = snapshot.docs.map(doc => doc.data());
+        totalAppointments += appointments.length;
+        appointments.forEach(apt => {
+          if (apt.patientId) totalPatients.add(apt.patientId);
+          if (apt.status === 'completed') {
+            totalRevenue += (doctor.consultation_fee || 0);
+          }
+        });
+      }
+      
+      setStats({
+        totalDoctors,
+        activeDoctors,
+        totalAppointments,
+        totalPatients: totalPatients.size,
+        totalRevenue
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
   };
 
@@ -115,7 +164,6 @@ const HospitalDashboard = () => {
   const handleAddDoctor = async (e) => {
     e.preventDefault();
     
-    // Validation
     if (newDoctor.password !== newDoctor.confirmPassword) {
       alert('Passwords do not match!');
       return;
@@ -131,7 +179,6 @@ const HospitalDashboard = () => {
     try {
       const doctorId = newDoctor.doctorId || generateDoctorId();
       
-      // Check if doctor already exists
       const doctorRef = doc(db, 'doctors', doctorId);
       const doctorSnap = await getDoc(doctorRef);
       
@@ -141,54 +188,36 @@ const HospitalDashboard = () => {
         return;
       }
 
-      // Hash the password before storing
       const hashedPassword = await hashPassword(newDoctor.password);
       
-      // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         newDoctor.email,
         newDoctor.password
       );
       
-      // Prepare doctor data with the exact structure you specified
       const doctorData = {
-        // Identification
         doctorId: doctorId,
         uid: userCredential.user.uid,
-        
-        // Personal Information
         name: newDoctor.name,
         email: newDoctor.email,
         phone: newDoctor.phone,
         gender: newDoctor.gender,
         dob: newDoctor.dob,
-        
-        // Professional Information
         specialization: newDoctor.specialization,
         qualification: newDoctor.qualification,
         registration_no: newDoctor.registration_no,
         experience_years: parseInt(newDoctor.experience_years) || 0,
         department: newDoctor.department,
-        
-        // Hospital Association
         hospitalId: hospitalData.hospital_id,
         hospitalName: hospitalData.name,
         doctorType: "hospital",
-        
-        // Fees
         consultation_fee: parseInt(newDoctor.consultation_fee) || 0,
         online_fee: parseInt(newDoctor.online_fee) || 0,
-        
-        // Schedule
         opd_days: newDoctor.opd_days,
         opd_time: newDoctor.opd_time,
-        
-        // Other
         bio: newDoctor.bio || "",
         photo_url: newDoctor.photo_url || "",
-        
-        // Status and Timestamps
         status: "approved",
         isActive: true,
         createdAt: new Date().toISOString(),
@@ -196,21 +225,18 @@ const HospitalDashboard = () => {
         approvedAt: new Date().toISOString(),
         approvedBy: currentUser?.email || hospitalData.email,
         lastLogin: null,
-        
-        // Security - Store hashed password (never show in UI)
         passwordHash: hashedPassword,
         passwordLastChanged: new Date().toISOString()
       };
       
-      // Save to Firestore
       await setDoc(doc(db, 'doctors', doctorId), doctorData);
       
       alert(`✅ Doctor ${newDoctor.name} added successfully!\n\nDoctor ID: ${doctorId}\nPassword: ${newDoctor.password}\n\nPlease save these credentials and share with the doctor.`);
       
-      // Reset form and close modal
       resetDoctorForm();
       setShowAddDoctorModal(false);
       await fetchDoctors(hospitalData.hospital_id);
+      await fetchStats(hospitalData.hospital_id);
       
     } catch (error) {
       console.error('Error adding doctor:', error);
@@ -243,7 +269,6 @@ const HospitalDashboard = () => {
         updatedAt: new Date().toISOString()
       };
       
-      // If password is being changed
       if (selectedDoctor.newPassword) {
         if (selectedDoctor.newPassword !== selectedDoctor.confirmNewPassword) {
           alert('New passwords do not match!');
@@ -260,12 +285,6 @@ const HospitalDashboard = () => {
         const hashedPassword = await hashPassword(selectedDoctor.newPassword);
         updateData.passwordHash = hashedPassword;
         updateData.passwordLastChanged = new Date().toISOString();
-        
-        // Update Firebase Auth password
-        const user = auth.currentUser;
-        if (user && user.uid === selectedDoctor.uid) {
-          await user.updatePassword(selectedDoctor.newPassword);
-        }
       }
       
       const doctorRef = doc(db, 'doctors', selectedDoctor.doctorId);
@@ -295,6 +314,7 @@ const HospitalDashboard = () => {
       await deleteDoc(doc(db, 'doctors', doctor.doctorId));
       alert(`✅ Doctor ${doctor.name} deleted successfully!`);
       await fetchDoctors(hospitalData.hospital_id);
+      await fetchStats(hospitalData.hospital_id);
     } catch (error) {
       console.error('Error deleting doctor:', error);
       alert('Error: ' + error.message);
@@ -329,13 +349,13 @@ const HospitalDashboard = () => {
   };
 
   // Toggle OPD days
-  const toggleOpdDay = (day) => {
-    if (selectedDoctor) {
+  const toggleOpdDay = (day, isEditing = false) => {
+    if (isEditing && selectedDoctor) {
       const updatedDays = selectedDoctor.opd_days.includes(day)
         ? selectedDoctor.opd_days.filter(d => d !== day)
         : [...selectedDoctor.opd_days, day];
       setSelectedDoctor({ ...selectedDoctor, opd_days: updatedDays });
-    } else {
+    } else if (!isEditing) {
       const updatedDays = newDoctor.opd_days.includes(day)
         ? newDoctor.opd_days.filter(d => d !== day)
         : [...newDoctor.opd_days, day];
@@ -358,100 +378,226 @@ const HospitalDashboard = () => {
 
   if (loading && !hospitalData) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading dashboard...</p>
+      <div className="hospital-doctor-dashboard">
+        <div className="loading-container">
+          <div className="spinner"></div>
+          <p>Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="hospital-dashboard">
+    <div className="hospital-doctor-dashboard">
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-left">
           <h1>🏥 {hospitalData?.name}</h1>
-          <p>Hospital Dashboard</p>
-        </div>
-        <div className="header-right">
           <div className="hospital-info">
             <span>📧 {hospitalData?.email}</span>
             <span>📞 {hospitalData?.phone}</span>
           </div>
+        </div>
+        <div className="header-right">
           <button onClick={handleLogout} className="logout-btn">
             Logout
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="dashboard-content">
-        <div className="content-header">
-          <h2>👨‍⚕️ Hospital Doctors</h2>
-          <button 
-            className="add-doctor-btn"
-            onClick={() => {
-              resetDoctorForm();
-              setShowAddDoctorModal(true);
-            }}
-          >
-            + Add New Doctor
-          </button>
-        </div>
+      {/* Dashboard Container */}
+      <div className="dashboard-container">
+        {/* Sidebar */}
+        <aside className="dashboard-sidebar">
+          <nav className="sidebar-nav">
+            <button 
+              className={`nav-btn ${activeTab === 'doctors' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('doctors')}
+            >
+              👨‍⚕️ Doctors ({stats.totalDoctors})
+            </button>
+            <button 
+              className={`nav-btn ${activeTab === 'stats' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('stats')}
+            >
+              📊 Statistics
+            </button>
+            <button 
+              className={`nav-btn ${activeTab === 'profile' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('profile')}
+            >
+              🏥 Hospital Profile
+            </button>
+          </nav>
+          
+          <div className="quick-stats">
+            <h4>Quick Stats</h4>
+            <div className="stat-item">
+              <span className="stat-label">Total Doctors:</span>
+              <span className="stat-value">{stats.totalDoctors}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Active Doctors:</span>
+              <span className="stat-value">{stats.activeDoctors}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Total Appointments:</span>
+              <span className="stat-value">{stats.totalAppointments}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Total Patients:</span>
+              <span className="stat-value">{stats.totalPatients}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Revenue:</span>
+              <span className="stat-value">₹{stats.totalRevenue.toLocaleString()}</span>
+            </div>
+          </div>
+        </aside>
 
-        {/* Doctors List */}
-        <div className="doctors-grid">
-          {doctors.map(doctor => (
-            <div key={doctor.doctorId} className="doctor-card">
-              <div className="doctor-card-header">
-                <img 
-                  src={doctor.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} 
-                  alt={doctor.name}
-                  className="doctor-avatar"
-                />
-                <div className="doctor-basic-info">
-                  <h3>Dr. {doctor.name}</h3>
-                  <p className="doctor-id">ID: {doctor.doctorId}</p>
-                  <p className="doctor-specialty">{doctor.specialization}</p>
-                </div>
-              </div>
-              
-              <div className="doctor-details">
-                <p><strong>📧 Email:</strong> {doctor.email}</p>
-                <p><strong>📞 Phone:</strong> {doctor.phone}</p>
-                <p><strong>🏥 Department:</strong> {doctor.department}</p>
-                <p><strong>📅 Experience:</strong> {doctor.experience_years} years</p>
-                <p><strong>💰 Fees:</strong> ₹{doctor.consultation_fee} (Clinic) / ₹{doctor.online_fee} (Online)</p>
-                <p><strong>📋 OPD:</strong> {doctor.opd_days?.join(', ')} ({doctor.opd_time})</p>
-                <p><strong>✅ Status:</strong> <span className="status-badge approved">Approved</span></p>
-              </div>
-              
-              <div className="doctor-actions">
+        {/* Main Content */}
+        <main className="dashboard-main">
+          {/* Doctors Tab */}
+          {activeTab === 'doctors' && (
+            <div className="tab-content">
+              <div className="content-header">
+                <h2>👨‍⚕️ Hospital Doctors</h2>
                 <button 
-                  className="edit-btn"
+                  className="add-doctor-btn"
                   onClick={() => {
-                    setSelectedDoctor({ ...doctor, newPassword: '', confirmNewPassword: '' });
-                    setShowEditDoctorModal(true);
+                    resetDoctorForm();
+                    setShowAddDoctorModal(true);
                   }}
                 >
-                  ✏️ Edit
-                </button>
-                <button 
-                  className="delete-btn"
-                  onClick={() => handleDeleteDoctor(doctor)}
-                >
-                  🗑️ Delete
+                  + Add New Doctor
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
 
-        {doctors.length === 0 && (
-          <div className="no-doctors">
-            <p>No doctors added yet. Click "Add New Doctor" to get started.</p>
-          </div>
-        )}
+              {/* Doctors Grid */}
+              <div className="doctors-grid">
+                {doctors.map(doctor => (
+                  <div key={doctor.doctorId} className="doctor-card">
+                    <div className="doctor-card-header">
+                      <img 
+                        src={doctor.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} 
+                        alt={doctor.name}
+                        className="doctor-avatar"
+                        onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"; }}
+                      />
+                      <div className="doctor-basic-info">
+                        <h3>Dr. {doctor.name}</h3>
+                        <p className="doctor-id">ID: {doctor.doctorId}</p>
+                        <p className="doctor-specialty">{doctor.specialization}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="doctor-details">
+                      <p><strong>📧 Email:</strong> {doctor.email}</p>
+                      <p><strong>📞 Phone:</strong> {doctor.phone}</p>
+                      <p><strong>🏥 Department:</strong> {doctor.department}</p>
+                      <p><strong>📅 Experience:</strong> {doctor.experience_years} years</p>
+                      <p><strong>💰 Fees:</strong> ₹{doctor.consultation_fee} / ₹{doctor.online_fee}</p>
+                      <p><strong>📋 OPD:</strong> {doctor.opd_days?.join(', ')} ({doctor.opd_time})</p>
+                      <p><strong>✅ Status:</strong> <span className="status-badge approved">Approved</span></p>
+                    </div>
+                    
+                    <div className="doctor-actions">
+                      <button 
+                        className="edit-btn"
+                        onClick={() => {
+                          setSelectedDoctor({ ...doctor, newPassword: '', confirmNewPassword: '' });
+                          setShowEditDoctorModal(true);
+                        }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button 
+                        className="delete-btn"
+                        onClick={() => handleDeleteDoctor(doctor)}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {doctors.length === 0 && (
+                <div className="no-doctors">
+                  <p>No doctors added yet. Click "Add New Doctor" to get started.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Statistics Tab */}
+          {activeTab === 'stats' && (
+            <div className="tab-content">
+              <h2>📊 Hospital Statistics</h2>
+              <div className="doctors-grid">
+                <div className="doctor-card">
+                  <div className="doctor-card-header" style={{ background: 'linear-gradient(135deg, #11998e, #38ef7d)' }}>
+                    <h3 style={{ margin: 0 }}>👨‍⚕️ Doctors</h3>
+                  </div>
+                  <div className="doctor-details">
+                    <p><strong>Total Doctors:</strong> {stats.totalDoctors}</p>
+                    <p><strong>Active Doctors:</strong> {stats.activeDoctors}</p>
+                    <p><strong>Departments:</strong> {new Set(doctors.map(d => d.department)).size}</p>
+                    <p><strong>Specializations:</strong> {new Set(doctors.map(d => d.specialization)).size}</p>
+                  </div>
+                </div>
+                
+                <div className="doctor-card">
+                  <div className="doctor-card-header" style={{ background: 'linear-gradient(135deg, #f093fb, #f5576c)' }}>
+                    <h3 style={{ margin: 0 }}>📅 Appointments</h3>
+                  </div>
+                  <div className="doctor-details">
+                    <p><strong>Total Appointments:</strong> {stats.totalAppointments}</p>
+                    <p><strong>Total Patients:</strong> {stats.totalPatients}</p>
+                    <p><strong>Avg per Doctor:</strong> {(stats.totalAppointments / stats.totalDoctors || 0).toFixed(1)}</p>
+                  </div>
+                </div>
+                
+                <div className="doctor-card">
+                  <div className="doctor-card-header" style={{ background: 'linear-gradient(135deg, #fa709a, #fee140)' }}>
+                    <h3 style={{ margin: 0 }}>💰 Revenue</h3>
+                  </div>
+                  <div className="doctor-details">
+                    <p><strong>Total Revenue:</strong> ₹{stats.totalRevenue.toLocaleString()}</p>
+                    <p><strong>Avg per Doctor:</strong> ₹{(stats.totalRevenue / stats.totalDoctors || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <div className="tab-content">
+              <h2>🏥 Hospital Profile</h2>
+              <div className="doctors-grid">
+                <div className="doctor-card">
+                  <div className="doctor-card-header">
+                    <div className="doctor-basic-info">
+                      <h3>{hospitalData?.name}</h3>
+                      <p className="doctor-id">ID: {hospitalData?.hospital_id}</p>
+                    </div>
+                  </div>
+                  <div className="doctor-details">
+                    <p><strong>📧 Email:</strong> {hospitalData?.email}</p>
+                    <p><strong>📞 Phone:</strong> {hospitalData?.phone}</p>
+                    <p><strong>📍 Address:</strong> {hospitalData?.address}</p>
+                    <p><strong>🏙️ City:</strong> {hospitalData?.city}</p>
+                    <p><strong>📮 Pincode:</strong> {hospitalData?.pincode}</p>
+                    <p><strong>📅 Established:</strong> {hospitalData?.establishedYear || 'N/A'}</p>
+                    <p><strong>⭐ Rating:</strong> {hospitalData?.rating || 'N/A'}</p>
+                    <p><strong>📝 Description:</strong> {hospitalData?.description || 'No description available'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
       </div>
 
       {/* Add Doctor Modal */}
@@ -637,7 +783,7 @@ const HospitalDashboard = () => {
                       <input
                         type="checkbox"
                         checked={newDoctor.opd_days.includes(day)}
-                        onChange={() => toggleOpdDay(day)}
+                        onChange={() => toggleOpdDay(day, false)}
                       />
                       {day}
                     </label>
@@ -820,7 +966,7 @@ const HospitalDashboard = () => {
                       <input
                         type="checkbox"
                         checked={selectedDoctor.opd_days?.includes(day)}
-                        onChange={() => toggleOpdDay(day)}
+                        onChange={() => toggleOpdDay(day, true)}
                       />
                       {day}
                     </label>
