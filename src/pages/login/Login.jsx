@@ -425,7 +425,7 @@ const Login = () => {
       
       // Redirect based on doctor type
       if (doctorData.doctorType === "hospital") {
-        window.location.href = "/hospital-doctor-dashboard";
+        window.location.href = "/doctor-dashboard";
       } else {
         window.location.href = "/independent-doctor-dashboard";
       }
