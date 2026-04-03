@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom'; // Use HashRouter for GitHub Pages
 import Home from './pages/Home';
 import LoadingPage from './pages/LoadingPage';
 import Login from './pages/login/Login';
@@ -17,8 +17,6 @@ import HospitalProtectedRoute from './components/HospitalProtectedRoute';
 // Add these imports at the top
 import HospitalDoctorDashboard from './pages/doctor_dashboard/HospitalDoctorDashboard';
 import IndependentDoctorDashboard from './pages/doctor_dashboard/IndependentDoctorDashboard';
-
-
 
 import './App.css';
 
