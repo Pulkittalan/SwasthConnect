@@ -2,368 +2,472 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../firebase/firebase';
 import { 
   doc, getDoc, collection, query, where, getDocs, 
-  updateDoc, addDoc, deleteDoc, setDoc, Timestamp 
+  updateDoc, addDoc, deleteDoc, setDoc, onSnapshot 
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import bcrypt from 'bcryptjs';
-import './HospitalDoctorDashboard.css';
+import VideoCall from '../../components/videocall/VideoCall';
+import Chat from '../../components/Chat/Chat';
+import './DoctorDashboard.css';
 
-const HospitalDashboard = () => {
+const HospitalDoctorDashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+
+  const [isOnline, setIsOnline] = useState(true);
+  const [activeTab, setActiveTab] = useState("appointments");
+  const [doctorData, setDoctorData] = useState(null);
+  const [doctorId, setDoctorId] = useState(null);
   const [hospitalData, setHospitalData] = useState(null);
-  const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
-  const [showEditDoctorModal, setShowEditDoctorModal] = useState(false);
-  const [selectedDoctor, setSelectedDoctor] = useState(null);
-  const [activeTab, setActiveTab] = useState('doctors');
+  const [appointments, setAppointments] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [prescription, setPrescription] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [savingPrescription, setSavingPrescription] = useState(false);
+  const [earnings, setEarnings] = useState({
+    total: 0,
+    pending: 0,
+    completed: 0,
+    thisMonth: 0,
+  });
   const [stats, setStats] = useState({
-    totalDoctors: 0,
-    activeDoctors: 0,
     totalAppointments: 0,
+    completedAppointments: 0,
+    pendingAppointments: 0,
     totalPatients: 0,
-    totalRevenue: 0
-  });
-  const [newDoctor, setNewDoctor] = useState({
-    doctorId: '',
-    name: '',
-    email: '',
-    phone: '',
-    gender: '',
-    dob: '',
-    specialization: '',
-    department: '',
-    qualification: 'MBBS',
-    registration_no: '',
-    experience_years: '',
-    consultation_fee: '',
-    online_fee: '',
-    opd_days: ['Monday', 'Wednesday', 'Friday'],
-    opd_time: '09:00-17:00',
-    bio: '',
-    photo_url: '',
-    password: '',
-    confirmPassword: ''
+    averageRating: 0,
   });
 
-  const daysList = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const specializationOptions = [
-    "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "General Surgery",
-    "Gynecology", "ENT", "Dermatology", "Psychiatry", "Radiology",
-    "Anesthesiology", "Ophthalmology", "Urology", "Nephrology", "Oncology"
-  ];
-  const qualificationOptions = ["MBBS", "MD", "MS", "DNB", "MCh", "DM", "BDS", "MDS"];
+  // Video call and chat states
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [activeCallRoom, setActiveCallRoom] = useState(null);
+  const [activeChat, setActiveChat] = useState(null);
+  const [selectedPatientForChat, setSelectedPatientForChat] = useState(null);
+  const [unreadMessages, setUnreadMessages] = useState({});
 
-  // Fetch hospital data
+  // Fetch doctor data
   useEffect(() => {
-    const fetchHospitalData = async () => {
+    const fetchDoctorData = async () => {
       if (!currentUser) return;
-      
-      try {
-        const hospitalId = localStorage.getItem('hospitalId');
-        if (!hospitalId) {
-          navigate('/login');
-          return;
-        }
 
-        const hospitalRef = doc(db, 'hospitals', hospitalId);
-        const hospitalSnap = await getDoc(hospitalRef);
-        
-        if (hospitalSnap.exists()) {
-          setHospitalData(hospitalSnap.data());
-          await fetchDoctors(hospitalId);
-          await fetchStats(hospitalId);
+      try {
+        setLoading(true);
+
+        const doctorsRef = collection(db, "doctors");
+        const q = query(doctorsRef, where("uid", "==", currentUser.uid));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const doctorDoc = querySnapshot.docs[0];
+          const data = doctorDoc.data();
+          setDoctorData(data);
+          setDoctorId(doctorDoc.id);
+
+          // Fetch hospital data
+          if (data.hospitalId) {
+            const hospitalRef = doc(db, "hospitals", data.hospitalId);
+            const hospitalSnap = await getDoc(hospitalRef);
+            if (hospitalSnap.exists()) {
+              setHospitalData(hospitalSnap.data());
+            }
+          }
+
+          await fetchAppointments(doctorDoc.id);
+          await fetchPatients(doctorDoc.id);
+          await fetchReviews(doctorDoc.id);
+          await calculateStats(doctorDoc.id);
+          await calculateEarnings(doctorDoc.id);
+        } else {
+          console.log("Doctor not found");
         }
       } catch (error) {
-        console.error('Error fetching hospital data:', error);
+        console.error("Error fetching doctor data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchHospitalData();
-  }, [currentUser, navigate]);
+    fetchDoctorData();
+  }, [currentUser]);
 
-  // Fetch doctors for this hospital
-  const fetchDoctors = async (hospitalId) => {
+  // Update the fetchAppointments function in HospitalDoctorDashboard.jsx
+
+  const fetchAppointments = async (doctorIdParam) => {
+    if (!doctorIdParam) return;
+
     try {
-      const doctorsRef = collection(db, 'doctors');
-      const q = query(
-        doctorsRef, 
-        where('hospitalId', '==', hospitalId),
-        where('doctorType', '==', 'hospital')
-      );
-      const querySnapshot = await getDocs(q);
-      const doctorsList = querySnapshot.docs.map(doc => ({
+      console.log("Fetching appointments for doctorId:", doctorIdParam);
+      console.log("Doctor email:", doctorData?.email);
+
+      const appointmentsRef = collection(db, "appointments");
+
+      // Try multiple query strategies
+      let appointmentsList = [];
+
+      // Strategy 1: Query by doctorId (both field names)
+      const q1 = query(appointmentsRef, where("doctorId", "==", doctorIdParam));
+      const snapshot1 = await getDocs(q1);
+      appointmentsList = snapshot1.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
-      setDoctors(doctorsList);
-      return doctorsList;
+
+      // Strategy 2: If no results, try by doctorUid
+      if (appointmentsList.length === 0 && doctorData?.uid) {
+        const q2 = query(
+          appointmentsRef,
+          where("doctorUid", "==", doctorData.uid),
+        );
+        const snapshot2 = await getDocs(q2);
+        appointmentsList = snapshot2.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+      }
+
+      // Strategy 3: If still no results, try by doctorEmail
+      if (appointmentsList.length === 0 && doctorData?.email) {
+        const q3 = query(
+          appointmentsRef,
+          where("doctorEmail", "==", doctorData.email),
+        );
+        const snapshot3 = await getDocs(q3);
+        appointmentsList = snapshot3.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+      }
+
+      // Strategy 4: Get all appointments and filter (fallback)
+      if (appointmentsList.length === 0) {
+        const allAppointments = await getDocs(appointmentsRef);
+        appointmentsList = allAppointments.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .filter(
+            (apt) =>
+              apt.doctorId === doctorIdParam ||
+              apt.doctorUid === doctorData?.uid ||
+              apt.doctorEmail === doctorData?.email,
+          );
+      }
+
+      console.log("Found appointments:", appointmentsList.length);
+      setAppointments(appointmentsList);
+      return appointmentsList;
     } catch (error) {
-      console.error('Error fetching doctors:', error);
+      console.error("Error fetching appointments:", error);
       return [];
     }
   };
 
-  // Fetch hospital stats
-  const fetchStats = async (hospitalId) => {
+  const fetchPatients = async (doctorIdParam) => {
+    if (!doctorIdParam) return;
+
     try {
-      const doctorsList = await fetchDoctors(hospitalId);
-      const totalDoctors = doctorsList.length;
-      const activeDoctors = doctorsList.filter(d => d.isActive === true).length;
+      const appointmentsRef = collection(db, "appointments");
+      const q = query(appointmentsRef, where("doctorId", "==", doctorIdParam));
+      const snapshot = await getDocs(q);
+
+      const patientIds = [
+        ...new Set(
+          snapshot.docs
+            .map((doc) => {
+              const data = doc.data();
+              return data.patientId || data.userId;
+            })
+            .filter(Boolean),
+        ),
+      ];
+
+      const patientsList = [];
+      for (const patientId of patientIds) {
+        try {
+          const patientRef = doc(db, "users", patientId);
+          const patientSnap = await getDoc(patientRef);
+          if (patientSnap.exists()) {
+            patientsList.push({
+              id: patientId,
+              ...patientSnap.data(),
+            });
+          } else {
+            const appointment = snapshot.docs
+              .find(
+                (doc) =>
+                  doc.data().patientId === patientId ||
+                  doc.data().userId === patientId,
+              )
+              ?.data();
+            patientsList.push({
+              id: patientId,
+              displayName: appointment?.patientName || "Patient",
+              email: appointment?.patientEmail || "N/A",
+            });
+          }
+        } catch (err) {
+          console.error("Error fetching patient:", patientId, err);
+        }
+      }
+      setPatients(patientsList);
+    } catch (error) {
+      console.error("Error fetching patients:", error);
+    }
+  };
+  
+  const fetchReviews = async (doctorIdParam) => {
+    if (!doctorIdParam) return;
+    
+    try {
+      const reviewsRef = collection(db, 'reviews');
+      const q = query(reviewsRef, where('doctorId', '==', doctorIdParam));
+      const snapshot = await getDocs(q);
+      const reviewsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setReviews(reviewsList);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    }
+  };
+  
+  const calculateStats = async (doctorIdParam) => {
+    if (!doctorIdParam) return;
+    
+    try {
+      const appointmentsRef = collection(db, 'appointments');
+      const q = query(appointmentsRef, where('doctorId', '==', doctorIdParam));
+      const snapshot = await getDocs(q);
+      const appointmentsList = snapshot.docs.map(doc => doc.data());
       
-      // Fetch appointments for all doctors
-      let totalAppointments = 0;
-      let totalPatients = new Set();
-      let totalRevenue = 0;
+      const total = appointmentsList.length;
+      const completed = appointmentsList.filter(a => a.status === 'completed').length;
+      const pending = appointmentsList.filter(a => a.status === 'scheduled' || a.status === 'confirmed').length;
+      const uniquePatients = new Set(
+        appointmentsList.map(a => a.patientId || a.userId).filter(Boolean)
+      ).size;
       
-      for (const doctor of doctorsList) {
-        const appointmentsRef = collection(db, 'appointments');
-        const q = query(appointmentsRef, where('doctorId', '==', doctor.doctorId));
-        const snapshot = await getDocs(q);
-        const appointments = snapshot.docs.map(doc => doc.data());
-        totalAppointments += appointments.length;
-        appointments.forEach(apt => {
-          if (apt.patientId) totalPatients.add(apt.patientId);
-          if (apt.status === 'completed') {
-            totalRevenue += (doctor.consultation_fee || 0);
+      let avgRating = 0;
+      try {
+        const reviewsRef = collection(db, 'reviews');
+        const reviewsQ = query(reviewsRef, where('doctorId', '==', doctorIdParam));
+        const reviewsSnapshot = await getDocs(reviewsQ);
+        const reviewsList = reviewsSnapshot.docs.map(doc => doc.data());
+        if (reviewsList.length > 0) {
+          avgRating = reviewsList.reduce((sum, r) => sum + (r.rating || 0), 0) / reviewsList.length;
+        }
+      } catch (err) {
+        console.error('Error fetching reviews for stats:', err);
+      }
+      
+      setStats({
+        totalAppointments: total,
+        completedAppointments: completed,
+        pendingAppointments: pending,
+        totalPatients: uniquePatients,
+        averageRating: avgRating
+      });
+    } catch (error) {
+      console.error('Error calculating stats:', error);
+    }
+  };
+  
+  const calculateEarnings = async (doctorIdParam) => {
+    if (!doctorIdParam) return;
+    
+    try {
+      const appointmentsRef = collection(db, 'appointments');
+      const q = query(
+        appointmentsRef,
+        where('doctorId', '==', doctorIdParam),
+        where('status', 'in', ['completed', 'scheduled', 'confirmed'])
+      );
+      const snapshot = await getDocs(q);
+      const appointmentsList = snapshot.docs.map(doc => doc.data());
+      
+      const fee = doctorData?.consultation_fee || 500;
+      const total = appointmentsList.length * fee;
+      const completed = appointmentsList.filter(a => a.status === 'completed').length * fee;
+      const pending = (appointmentsList.filter(a => a.status !== 'completed').length) * fee;
+      
+      const now = new Date();
+      const thisMonth = appointmentsList.filter(a => {
+        const aptDate = new Date(a.date);
+        return aptDate.getMonth() === now.getMonth() && aptDate.getFullYear() === now.getFullYear() && a.status === 'completed';
+      }).length * fee;
+      
+      setEarnings({
+        total: total,
+        pending: pending,
+        completed: completed,
+        thisMonth: thisMonth
+      });
+    } catch (error) {
+      console.error('Error calculating earnings:', error);
+    }
+  };
+  
+  const getPatientId = (appointment) => {
+    return appointment.patientId || appointment.userId;
+  };
+  
+  const initChat = async (patientId, patientName) => {
+    if (!currentUser || !patientId) {
+      alert('Please login again');
+      return;
+    }
+    
+    try {
+      const chatId = [currentUser.uid, patientId].sort().join('_');
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await getDoc(chatRef);
+      
+      if (!chatDoc.exists()) {
+        await setDoc(chatRef, {
+          participants: [currentUser.uid, patientId],
+          participantNames: {
+            [currentUser.uid]: `Dr. ${doctorData?.name || 'Doctor'}`,
+            [patientId]: patientName || 'Patient'
+          },
+          participantTypes: {
+            [currentUser.uid]: 'doctor',
+            [patientId]: 'patient'
+          },
+          createdAt: new Date(),
+          lastMessage: '',
+          lastMessageTime: new Date(),
+          unreadCount: {
+            [currentUser.uid]: 0,
+            [patientId]: 0
           }
         });
       }
       
-      setStats({
-        totalDoctors,
-        activeDoctors,
-        totalAppointments,
-        totalPatients: totalPatients.size,
-        totalRevenue
+      setActiveChat(chatId);
+      setSelectedPatientForChat({ id: patientId, name: patientName || 'Patient' });
+      setShowChat(true);
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+      alert('Failed to start chat. Please try again.');
+    }
+  };
+  
+  const initVideoCall = async (patientId, patientName) => {
+    if (!currentUser || !patientId) {
+      alert('Please login again');
+      return;
+    }
+    
+    try {
+      const roomId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const callRef = doc(db, 'calls', roomId);
+      
+      await setDoc(callRef, {
+        roomId,
+        initiator: currentUser.uid,
+        initiatorName: `Dr. ${doctorData?.name || 'Doctor'}`,
+        initiatorType: 'doctor',
+        participant: patientId,
+        participantName: patientName || 'Patient',
+        status: 'waiting',
+        createdAt: new Date()
       });
+      
+      setActiveCallRoom(roomId);
+      setShowVideoCall(true);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error initiating video call:', error);
+      alert('Failed to start video call. Please try again.');
     }
   };
-
-  // Generate a unique doctor ID
-  const generateDoctorId = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `DOC${timestamp}${random}`;
-  };
-
-  // Hash password
-  const hashPassword = async (password) => {
-    const saltRounds = 10;
-    return await bcrypt.hash(password, saltRounds);
-  };
-
-  // Add new doctor
-  const handleAddDoctor = async (e) => {
-    e.preventDefault();
+  
+  useEffect(() => {
+    if (!currentUser) return;
     
-    if (newDoctor.password !== newDoctor.confirmPassword) {
-      alert('Passwords do not match!');
-      return;
-    }
+    const callsQuery = query(
+      collection(db, 'calls'),
+      where('participant', '==', currentUser.uid),
+      where('status', '==', 'waiting')
+    );
     
-    if (newDoctor.password.length < 6) {
-      alert('Password must be at least 6 characters long!');
-      return;
-    }
-
-    setLoading(true);
-    
-    try {
-      const doctorId = newDoctor.doctorId || generateDoctorId();
-      
-      const doctorRef = doc(db, 'doctors', doctorId);
-      const doctorSnap = await getDoc(doctorRef);
-      
-      if (doctorSnap.exists()) {
-        alert('Doctor ID already exists! Please use a different ID.');
-        setLoading(false);
-        return;
-      }
-
-      const hashedPassword = await hashPassword(newDoctor.password);
-      
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        newDoctor.email,
-        newDoctor.password
-      );
-      
-      const doctorData = {
-        doctorId: doctorId,
-        uid: userCredential.user.uid,
-        name: newDoctor.name,
-        email: newDoctor.email,
-        phone: newDoctor.phone,
-        gender: newDoctor.gender,
-        dob: newDoctor.dob,
-        specialization: newDoctor.specialization,
-        qualification: newDoctor.qualification,
-        registration_no: newDoctor.registration_no,
-        experience_years: parseInt(newDoctor.experience_years) || 0,
-        department: newDoctor.department,
-        hospitalId: hospitalData.hospital_id,
-        hospitalName: hospitalData.name,
-        doctorType: "hospital",
-        consultation_fee: parseInt(newDoctor.consultation_fee) || 0,
-        online_fee: parseInt(newDoctor.online_fee) || 0,
-        opd_days: newDoctor.opd_days,
-        opd_time: newDoctor.opd_time,
-        bio: newDoctor.bio || "",
-        photo_url: newDoctor.photo_url || "",
-        status: "approved",
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        approvedAt: new Date().toISOString(),
-        approvedBy: currentUser?.email || hospitalData.email,
-        lastLogin: null,
-        passwordHash: hashedPassword,
-        passwordLastChanged: new Date().toISOString()
-      };
-      
-      await setDoc(doc(db, 'doctors', doctorId), doctorData);
-      
-      alert(`✅ Doctor ${newDoctor.name} added successfully!\n\nDoctor ID: ${doctorId}\nPassword: ${newDoctor.password}\n\nPlease save these credentials and share with the doctor.`);
-      
-      resetDoctorForm();
-      setShowAddDoctorModal(false);
-      await fetchDoctors(hospitalData.hospital_id);
-      await fetchStats(hospitalData.hospital_id);
-      
-    } catch (error) {
-      console.error('Error adding doctor:', error);
-      alert('Error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Update existing doctor
-  const handleUpdateDoctor = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const updateData = {
-        name: selectedDoctor.name,
-        email: selectedDoctor.email,
-        phone: selectedDoctor.phone,
-        specialization: selectedDoctor.specialization,
-        department: selectedDoctor.department,
-        qualification: selectedDoctor.qualification,
-        registration_no: selectedDoctor.registration_no,
-        experience_years: parseInt(selectedDoctor.experience_years) || 0,
-        consultation_fee: parseInt(selectedDoctor.consultation_fee) || 0,
-        online_fee: parseInt(selectedDoctor.online_fee) || 0,
-        opd_days: selectedDoctor.opd_days,
-        opd_time: selectedDoctor.opd_time,
-        bio: selectedDoctor.bio || "",
-        updatedAt: new Date().toISOString()
-      };
-      
-      if (selectedDoctor.newPassword) {
-        if (selectedDoctor.newPassword !== selectedDoctor.confirmNewPassword) {
-          alert('New passwords do not match!');
-          setLoading(false);
-          return;
+    const unsubscribe = onSnapshot(callsQuery, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const call = change.doc.data();
+          setActiveCallRoom(call.roomId);
+          setShowVideoCall(true);
         }
-        
-        if (selectedDoctor.newPassword.length < 6) {
-          alert('Password must be at least 6 characters long!');
-          setLoading(false);
-          return;
-        }
-        
-        const hashedPassword = await hashPassword(selectedDoctor.newPassword);
-        updateData.passwordHash = hashedPassword;
-        updateData.passwordLastChanged = new Date().toISOString();
-      }
-      
-      const doctorRef = doc(db, 'doctors', selectedDoctor.doctorId);
-      await updateDoc(doctorRef, updateData);
-      
-      alert(`✅ Doctor ${selectedDoctor.name} updated successfully!`);
-      setShowEditDoctorModal(false);
-      setSelectedDoctor(null);
-      await fetchDoctors(hospitalData.hospital_id);
-      
-    } catch (error) {
-      console.error('Error updating doctor:', error);
-      alert('Error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Delete doctor
-  const handleDeleteDoctor = async (doctor) => {
-    if (!window.confirm(`Are you sure you want to delete Dr. ${doctor.name}? This action cannot be undone.`)) {
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      await deleteDoc(doc(db, 'doctors', doctor.doctorId));
-      alert(`✅ Doctor ${doctor.name} deleted successfully!`);
-      await fetchDoctors(hospitalData.hospital_id);
-      await fetchStats(hospitalData.hospital_id);
-    } catch (error) {
-      console.error('Error deleting doctor:', error);
-      alert('Error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Reset doctor form
-  const resetDoctorForm = () => {
-    setNewDoctor({
-      doctorId: generateDoctorId(),
-      name: '',
-      email: '',
-      phone: '',
-      gender: '',
-      dob: '',
-      specialization: '',
-      department: '',
-      qualification: 'MBBS',
-      registration_no: '',
-      experience_years: '',
-      consultation_fee: '',
-      online_fee: '',
-      opd_days: ['Monday', 'Wednesday', 'Friday'],
-      opd_time: '09:00-17:00',
-      bio: '',
-      photo_url: '',
-      password: '',
-      confirmPassword: ''
+      });
     });
+    
+    return () => unsubscribe();
+  }, [currentUser]);
+  
+  const handleStartConsultation = (appointment) => {
+    setSelectedPatient(appointment);
+    setActiveTab('consultation');
   };
-
-  // Toggle OPD days
-  const toggleOpdDay = (day, isEditing = false) => {
-    if (isEditing && selectedDoctor) {
-      const updatedDays = selectedDoctor.opd_days.includes(day)
-        ? selectedDoctor.opd_days.filter(d => d !== day)
-        : [...selectedDoctor.opd_days, day];
-      setSelectedDoctor({ ...selectedDoctor, opd_days: updatedDays });
-    } else if (!isEditing) {
-      const updatedDays = newDoctor.opd_days.includes(day)
-        ? newDoctor.opd_days.filter(d => d !== day)
-        : [...newDoctor.opd_days, day];
-      setNewDoctor({ ...newDoctor, opd_days: updatedDays });
+  
+  const handleSavePrescription = async () => {
+    if (!selectedPatient) {
+      alert('Please select a patient first');
+      return;
+    }
+    
+    if (!prescription.trim()) {
+      alert('Please write a prescription');
+      return;
+    }
+    
+    setSavingPrescription(true);
+    
+    try {
+      const prescriptionsRef = collection(db, 'prescriptions');
+      await addDoc(prescriptionsRef, {
+        doctorId: doctorId,
+        patientId: getPatientId(selectedPatient),
+        doctorName: doctorData?.name,
+        patientName: selectedPatient.patientName,
+        prescriptionText: prescription,
+        medications: prescription.split('\n').filter(line => line.trim() && !line.toLowerCase().includes('instructions:') && !line.toLowerCase().includes('diagnosis:')),
+        diagnosis: selectedPatient.reason || '',
+        appointmentId: selectedPatient.id,
+        hospitalId: hospitalData?.hospital_id,
+        hospitalName: hospitalData?.name,
+        createdAt: new Date(),
+        createdBy: doctorId
+      });
+      
+      alert('Prescription saved successfully!');
+      setPrescription('');
+    } catch (error) {
+      console.error('Error saving prescription:', error);
+      alert('Failed to save prescription');
+    } finally {
+      setSavingPrescription(false);
     }
   };
-
-  // Logout
+  
+  const toggleOnlineStatus = async () => {
+    const newStatus = !isOnline;
+    setIsOnline(newStatus);
+    
+    try {
+      if (doctorId) {
+        const doctorRef = doc(db, 'doctors', doctorId);
+        await updateDoc(doctorRef, {
+          isOnline: newStatus,
+          lastSeen: new Date()
+        });
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+  
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -375,651 +479,339 @@ const HospitalDashboard = () => {
       console.error('Logout error:', error);
     }
   };
-
-  if (loading && !hospitalData) {
+  
+  const getStatusBadgeClass = (status) => {
+    switch(status) {
+      case 'scheduled': return 'status-scheduled';
+      case 'confirmed': return 'status-confirmed';
+      case 'completed': return 'status-completed';
+      case 'cancelled': return 'status-cancelled';
+      default: return 'status-scheduled';
+    }
+  };
+  
+  if (loading) {
     return (
-      <div className="hospital-doctor-dashboard">
+      <div className="doctor-dashboard">
         <div className="loading-container">
-          <div className="spinner"></div>
+          <div className="loading-spinner"></div>
           <p>Loading dashboard...</p>
         </div>
       </div>
     );
   }
-
+  
   return (
-    <div className="hospital-doctor-dashboard">
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="header-left">
-          <h1>🏥 {hospitalData?.name}</h1>
-          <div className="hospital-info">
-            <span>📧 {hospitalData?.email}</span>
-            <span>📞 {hospitalData?.phone}</span>
+    <div className="doctor-dashboard">
+      {/* Video Call Modal */}
+      {showVideoCall && activeCallRoom && (
+        <div className="modal-overlay">
+          <div className="modal-content video-call-modal">
+            <button className="modal-close" onClick={() => { setShowVideoCall(false); setActiveCallRoom(null); }}>×</button>
+            <VideoCall roomId={activeCallRoom} currentUser={currentUser} userType="doctor" userName={`Dr. ${doctorData?.name || "Doctor"}`} onClose={() => { setShowVideoCall(false); setActiveCallRoom(null); }} />
           </div>
         </div>
+      )}
+      
+      {/* Chat Modal */}
+      {showChat && activeChat && selectedPatientForChat && (
+        <div className="modal-overlay">
+          <div className="modal-content chat-modal">
+            <button className="modal-close" onClick={() => { setShowChat(false); setActiveChat(null); setSelectedPatientForChat(null); }}>×</button>
+            <Chat chatId={activeChat} currentUser={currentUser} otherUser={selectedPatientForChat} userType="doctor" onVideoCall={() => { setShowChat(false); if (selectedPatientForChat) { initVideoCall(selectedPatientForChat.id, selectedPatientForChat.name); } }} />
+          </div>
+        </div>
+      )}
+      
+      <header className="dashboard-header">
+        <div className="header-left">
+          <h1>🏥 Hospital Doctor Dashboard</h1>
+          <div className="doctor-info">
+            <img src={doctorData?.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} alt="Doctor" className="doctor-avatar" onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"; }} />
+            <div>
+              <h3>Dr. {doctorData?.name || 'Doctor'} <span className="hospital-badge">Hospital</span></h3>
+              <p>{doctorData?.specialization || 'General Physician'}</p>
+              {hospitalData && <p className="hospital-name">🏥 {hospitalData.name}</p>}
+            </div>
+          </div>
+        </div>
+        
         <div className="header-right">
-          <button onClick={handleLogout} className="logout-btn">
+          <div className={`status-indicator ${isOnline ? 'online' : 'offline'}`}>
+            <span className="status-dot"></span>
+            {isOnline ? 'Online' : 'Offline'}
+          </div>
+          <button onClick={toggleOnlineStatus} className={`status-toggle-btn ${isOnline ? 'online' : 'offline'}`}>
+            {isOnline ? 'Go Offline' : 'Go Online'}
+          </button>
+          <button onClick={handleLogout} className="status-toggle-btn" style={{ background: '#e74c3c' }}>
             Logout
           </button>
         </div>
       </header>
-
-      {/* Dashboard Container */}
+      
       <div className="dashboard-container">
-        {/* Sidebar */}
         <aside className="dashboard-sidebar">
           <nav className="sidebar-nav">
-            <button 
-              className={`nav-btn ${activeTab === 'doctors' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('doctors')}
-            >
-              👨‍⚕️ Doctors ({stats.totalDoctors})
+            <button className={`nav-btn ${activeTab === 'appointments' ? 'active' : ''}`} onClick={() => setActiveTab('appointments')}>
+              📅 Appointments ({stats.pendingAppointments})
             </button>
-            <button 
-              className={`nav-btn ${activeTab === 'stats' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('stats')}
-            >
-              📊 Statistics
+            <button className={`nav-btn ${activeTab === 'consultation' ? 'active' : ''}`} onClick={() => setActiveTab('consultation')}>
+              📋 Consultation
             </button>
-            <button 
-              className={`nav-btn ${activeTab === 'profile' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('profile')}
-            >
-              🏥 Hospital Profile
+            <button className={`nav-btn ${activeTab === 'prescription' ? 'active' : ''}`} onClick={() => setActiveTab('prescription')}>
+              📝 Prescription
+            </button>
+            <button className={`nav-btn ${activeTab === 'patients' ? 'active' : ''}`} onClick={() => setActiveTab('patients')}>
+              👥 My Patients ({stats.totalPatients})
+            </button>
+            <button className={`nav-btn ${activeTab === 'earnings' ? 'active' : ''}`} onClick={() => setActiveTab('earnings')}>
+              💰 Earnings
+            </button>
+            <button className={`nav-btn ${activeTab === 'reviews' ? 'active' : ''}`} onClick={() => setActiveTab('reviews')}>
+              ⭐ Reviews ({reviews.length})
+            </button>
+            <button className={`nav-btn ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+              👤 Profile
             </button>
           </nav>
           
           <div className="quick-stats">
             <h4>Quick Stats</h4>
-            <div className="stat-item">
-              <span className="stat-label">Total Doctors:</span>
-              <span className="stat-value">{stats.totalDoctors}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Active Doctors:</span>
-              <span className="stat-value">{stats.activeDoctors}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Total Appointments:</span>
-              <span className="stat-value">{stats.totalAppointments}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Total Patients:</span>
-              <span className="stat-value">{stats.totalPatients}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Revenue:</span>
-              <span className="stat-value">₹{stats.totalRevenue.toLocaleString()}</span>
-            </div>
+            <div className="stat-item"><span className="stat-label">Appointments:</span><span className="stat-value">{stats.totalAppointments}</span></div>
+            <div className="stat-item"><span className="stat-label">Completed:</span><span className="stat-value">{stats.completedAppointments}</span></div>
+            <div className="stat-item"><span className="stat-label">Pending:</span><span className="stat-value">{stats.pendingAppointments}</span></div>
+            <div className="stat-item"><span className="stat-label">Total Patients:</span><span className="stat-value">{stats.totalPatients}</span></div>
+            <div className="stat-item"><span className="stat-label">Rating:</span><span className="stat-value">⭐ {stats.averageRating.toFixed(1)}</span></div>
           </div>
         </aside>
-
-        {/* Main Content */}
+        
         <main className="dashboard-main">
-          {/* Doctors Tab */}
-          {activeTab === 'doctors' && (
+          {/* Appointments Tab */}
+          {activeTab === 'appointments' && (
             <div className="tab-content">
-              <div className="content-header">
-                <h2>👨‍⚕️ Hospital Doctors</h2>
-                <button 
-                  className="add-doctor-btn"
-                  onClick={() => {
-                    resetDoctorForm();
-                    setShowAddDoctorModal(true);
-                  }}
-                >
-                  + Add New Doctor
-                </button>
-              </div>
-
-              {/* Doctors Grid */}
-              <div className="doctors-grid">
-                {doctors.map(doctor => (
-                  <div key={doctor.doctorId} className="doctor-card">
-                    <div className="doctor-card-header">
-                      <img 
-                        src={doctor.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} 
-                        alt={doctor.name}
-                        className="doctor-avatar"
-                        onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"; }}
-                      />
-                      <div className="doctor-basic-info">
-                        <h3>Dr. {doctor.name}</h3>
-                        <p className="doctor-id">ID: {doctor.doctorId}</p>
-                        <p className="doctor-specialty">{doctor.specialization}</p>
+              <h2>📅 Upcoming Appointments</h2>
+              <div className="appointments-grid">
+                {appointments.filter(a => a.status === 'scheduled' || a.status === 'confirmed').map(appointment => {
+                  const patientId = getPatientId(appointment);
+                  return (
+                    <div key={appointment.id} className="appointment-card">
+                      <div className="appointment-info">
+                        <h4>{appointment.patientName || 'Patient'}</h4>
+                        <p className="appointment-time">{appointment.date} at {appointment.time}</p>
+                        <p className="appointment-type">{appointment.reason || 'Consultation'}</p>
+                        <span className={`status-badge ${getStatusBadgeClass(appointment.status)}`}>{appointment.status}</span>
+                      </div>
+                      <div className="appointment-actions">
+                        <button className="start-consultation-btn" onClick={() => handleStartConsultation(appointment)}>Start Consultation</button>
+                        <button className="video-call-btn" onClick={() => initVideoCall(patientId, appointment.patientName)}>📹 Video Call</button>
+                        <button className="chat-btn" onClick={() => initChat(patientId, appointment.patientName)}>
+                          💬 Chat
+                          {unreadMessages[patientId] > 0 && <span className="unread-count">{unreadMessages[patientId]}</span>}
+                        </button>
                       </div>
                     </div>
-                    
-                    <div className="doctor-details">
-                      <p><strong>📧 Email:</strong> {doctor.email}</p>
-                      <p><strong>📞 Phone:</strong> {doctor.phone}</p>
-                      <p><strong>🏥 Department:</strong> {doctor.department}</p>
-                      <p><strong>📅 Experience:</strong> {doctor.experience_years} years</p>
-                      <p><strong>💰 Fees:</strong> ₹{doctor.consultation_fee} / ₹{doctor.online_fee}</p>
-                      <p><strong>📋 OPD:</strong> {doctor.opd_days?.join(', ')} ({doctor.opd_time})</p>
-                      <p><strong>✅ Status:</strong> <span className="status-badge approved">Approved</span></p>
-                    </div>
-                    
-                    <div className="doctor-actions">
-                      <button 
-                        className="edit-btn"
-                        onClick={() => {
-                          setSelectedDoctor({ ...doctor, newPassword: '', confirmNewPassword: '' });
-                          setShowEditDoctorModal(true);
-                        }}
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button 
-                        className="delete-btn"
-                        onClick={() => handleDeleteDoctor(doctor)}
-                      >
-                        🗑️ Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+                {appointments.filter(a => a.status === 'scheduled' || a.status === 'confirmed').length === 0 && (
+                  <p className="empty-state">No upcoming appointments</p>
+                )}
               </div>
-
-              {doctors.length === 0 && (
-                <div className="no-doctors">
-                  <p>No doctors added yet. Click "Add New Doctor" to get started.</p>
+              
+              <h2 style={{ marginTop: '40px' }}>📋 Past Appointments</h2>
+              <div className="appointments-grid">
+                {appointments.filter(a => a.status === 'completed' || a.status === 'cancelled').map(appointment => {
+                  const patientId = getPatientId(appointment);
+                  return (
+                    <div key={appointment.id} className="appointment-card">
+                      <div className="appointment-info">
+                        <h4>{appointment.patientName || 'Patient'}</h4>
+                        <p className="appointment-time">{appointment.date} at {appointment.time}</p>
+                        <span className={`status-badge ${getStatusBadgeClass(appointment.status)}`}>{appointment.status}</span>
+                      </div>
+                      <div className="appointment-actions">
+                        <button className="start-consultation-btn" onClick={() => { setSelectedPatient(appointment); setActiveTab('prescription'); }} style={{ background: '#95a5a6' }}>Write Prescription</button>
+                        <button className="chat-btn" onClick={() => initChat(patientId, appointment.patientName)}>💬 Chat</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
+          {/* Consultation Tab */}
+          {activeTab === 'consultation' && (
+            <div className="tab-content consultation-tab">
+              <h2>📋 Patient Consultation</h2>
+              {selectedPatient ? (
+                <div>
+                  <div className="consultation-header">
+                    <h3>Consultation with {selectedPatient.patientName}</h3>
+                    <p>Date: {selectedPatient.date} at {selectedPatient.time}</p>
+                  </div>
+                  <div className="consultation-info">
+                    <h4>Patient Information</h4>
+                    <p><strong>Name:</strong> {selectedPatient.patientName}</p>
+                    <p><strong>Email:</strong> {selectedPatient.patientEmail || 'N/A'}</p>
+                    <p><strong>Phone:</strong> {selectedPatient.patientPhone || 'N/A'}</p>
+                    <p><strong>Reason:</strong> {selectedPatient.reason || 'General consultation'}</p>
+                  </div>
+                  <div className="consultation-actions">
+                    <button className="action-btn" onClick={() => initVideoCall(getPatientId(selectedPatient), selectedPatient.patientName)}>📹 Start Video Call</button>
+                    <button className="action-btn" onClick={() => initChat(getPatientId(selectedPatient), selectedPatient.patientName)}>💬 Open Chat</button>
+                    <button className="action-btn" onClick={() => setActiveTab('prescription')}>📝 Write Prescription</button>
+                    <button className="action-btn" onClick={() => setActiveTab('appointments')}>← Back to Appointments</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p>Select an appointment to start consultation</p>
+                  <button className="action-btn" onClick={() => setActiveTab('appointments')}>View Appointments</button>
                 </div>
               )}
             </div>
           )}
-
-          {/* Statistics Tab */}
-          {activeTab === 'stats' && (
+          
+          {/* Prescription Tab */}
+          {activeTab === 'prescription' && (
             <div className="tab-content">
-              <h2>📊 Hospital Statistics</h2>
-              <div className="doctors-grid">
-                <div className="doctor-card">
-                  <div className="doctor-card-header" style={{ background: 'linear-gradient(135deg, #11998e, #38ef7d)' }}>
-                    <h3 style={{ margin: 0 }}>👨‍⚕️ Doctors</h3>
+              <h2>📝 Prescription Editor</h2>
+              {selectedPatient ? (
+                <div className="prescription-editor">
+                  <div className="prescription-header">
+                    <div>
+                      <h4>Patient: {selectedPatient.patientName}</h4>
+                      <p>Date: {new Date().toLocaleDateString()}</p>
+                      {hospitalData && <p>Hospital: {hospitalData.name}</p>}
+                    </div>
+                    <div className="prescription-actions">
+                      <button className="save-btn" onClick={handleSavePrescription} disabled={savingPrescription}>{savingPrescription ? 'Saving...' : 'Save Prescription'}</button>
+                      <button className="print-btn" onClick={() => window.print()}>Print</button>
+                    </div>
                   </div>
-                  <div className="doctor-details">
-                    <p><strong>Total Doctors:</strong> {stats.totalDoctors}</p>
-                    <p><strong>Active Doctors:</strong> {stats.activeDoctors}</p>
-                    <p><strong>Departments:</strong> {new Set(doctors.map(d => d.department)).size}</p>
-                    <p><strong>Specializations:</strong> {new Set(doctors.map(d => d.specialization)).size}</p>
-                  </div>
-                </div>
-                
-                <div className="doctor-card">
-                  <div className="doctor-card-header" style={{ background: 'linear-gradient(135deg, #f093fb, #f5576c)' }}>
-                    <h3 style={{ margin: 0 }}>📅 Appointments</h3>
-                  </div>
-                  <div className="doctor-details">
-                    <p><strong>Total Appointments:</strong> {stats.totalAppointments}</p>
-                    <p><strong>Total Patients:</strong> {stats.totalPatients}</p>
-                    <p><strong>Avg per Doctor:</strong> {(stats.totalAppointments / stats.totalDoctors || 0).toFixed(1)}</p>
-                  </div>
-                </div>
-                
-                <div className="doctor-card">
-                  <div className="doctor-card-header" style={{ background: 'linear-gradient(135deg, #fa709a, #fee140)' }}>
-                    <h3 style={{ margin: 0 }}>💰 Revenue</h3>
-                  </div>
-                  <div className="doctor-details">
-                    <p><strong>Total Revenue:</strong> ₹{stats.totalRevenue.toLocaleString()}</p>
-                    <p><strong>Avg per Doctor:</strong> ₹{(stats.totalRevenue / stats.totalDoctors || 0).toLocaleString()}</p>
+                  <textarea className="prescription-textarea" value={prescription} onChange={(e) => setPrescription(e.target.value)} placeholder="Write prescription here..." rows={15} />
+                  <div className="template-buttons">
+                    <h4>Quick Templates:</h4>
+                    <div className="template-grid">
+                      <button className="template-btn" onClick={() => setPrescription(prev => prev + '\n\nFever: Paracetamol 500mg - 1 tablet every 6 hours\nRest and hydration')}>Fever</button>
+                      <button className="template-btn" onClick={() => setPrescription(prev => prev + '\n\nCough: Cough Syrup - 10ml 3 times daily\nHoney with warm water')}>Cough</button>
+                      <button className="template-btn" onClick={() => setPrescription(prev => prev + '\n\nPain: Ibuprofen 200mg - As needed\nRest the affected area')}>Pain</button>
+                      <button className="template-btn" onClick={() => setPrescription(prev => prev + '\n\nAntibiotic: Amoxicillin 250mg - 3 times daily for 7 days\nComplete full course')}>Antibiotic</button>
+                    </div>
                   </div>
                 </div>
+              ) : (
+                <div className="empty-state"><p>Select a patient to write prescription</p><button className="action-btn" onClick={() => setActiveTab('appointments')}>Go to Appointments</button></div>
+              )}
+            </div>
+          )}
+          
+          {/* Patients Tab */}
+          {activeTab === 'patients' && (
+            <div className="tab-content">
+              <h2>👥 My Patients</h2>
+              <div className="patients-table">
+                <table>
+                  <thead>
+                    <tr><th>Patient Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    {patients.map(patient => (
+                      <tr key={patient.id}>
+                        <td>{patient.displayName || patient.name || 'Patient'}</td>
+                        <td>{patient.email || 'N/A'}</td>
+                        <td>{patient.phone || 'N/A'}</td>
+                        <td>
+                          <button className="action-small" onClick={() => { const apt = appointments.find(a => getPatientId(a) === patient.id); if (apt) { setSelectedPatient(apt); setActiveTab('prescription'); } else { alert('No appointment found'); } }}>Prescribe</button>
+                          <button className="action-small chat-action" onClick={() => initChat(patient.id, patient.displayName || patient.name)}>💬 Chat</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {patients.length === 0 && <p className="empty-state">No patients yet</p>}
               </div>
             </div>
           )}
-
+          
+          {/* Earnings Tab */}
+          {activeTab === 'earnings' && (
+            <div className="tab-content">
+              <h2>💰 Earnings Overview</h2>
+              <div className="earnings-grid">
+                <div className="earning-card total">
+                  <h3>Total Earnings</h3>
+                  <p className="amount">₹{earnings.total.toLocaleString()}</p>
+                </div>
+                <div className="earning-card completed">
+                  <h3>Completed</h3>
+                  <p className="amount">₹{earnings.completed.toLocaleString()}</p>
+                </div>
+                <div className="earning-card pending">
+                  <h3>Pending</h3>
+                  <p className="amount">₹{earnings.pending.toLocaleString()}</p>
+                </div>
+                <div className="earning-card monthly">
+                  <h3>This Month</h3>
+                  <p className="amount">₹{earnings.thisMonth.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="fee-info">
+                <h4>Consultation Fee: ₹{doctorData?.consultation_fee || 500}</h4>
+                <p>Online Fee: ₹{doctorData?.online_fee || 300}</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Reviews Tab */}
+          {activeTab === 'reviews' && (
+            <div className="tab-content">
+              <h2>⭐ Patient Reviews</h2>
+              {reviews.length > 0 ? reviews.map(review => (
+                <div key={review.id} className="review-card">
+                  <div className="review-header"><strong>{review.patientName}</strong><span className="review-rating">{'⭐'.repeat(Math.floor(review.rating || 0))} ({(review.rating || 0).toFixed(1)})</span></div>
+                  <p className="review-comment">{review.comment}</p>
+                  <small className="review-date">{review.createdAt?.toDate?.()?.toLocaleDateString() || 'Recent'}</small>
+                </div>
+              )) : <div className="empty-state"><p>No reviews yet</p></div>}
+            </div>
+          )}
+          
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <div className="tab-content">
-              <h2>🏥 Hospital Profile</h2>
-              <div className="doctors-grid">
-                <div className="doctor-card">
-                  <div className="doctor-card-header">
-                    <div className="doctor-basic-info">
-                      <h3>{hospitalData?.name}</h3>
-                      <p className="doctor-id">ID: {hospitalData?.hospital_id}</p>
-                    </div>
+              <h2>👤 Doctor Profile</h2>
+              <div className="profile-view">
+                <div className="profile-header">
+                  <img src={doctorData?.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} alt="Profile" className="profile-avatar" />
+                  <div>
+                    <h3>Dr. {doctorData?.name || 'Doctor'}</h3>
+                    <p>{doctorData?.specialization || 'General Physician'}</p>
+                    {hospitalData && <p className="hospital-name">🏥 {hospitalData.name}</p>}
                   </div>
-                  <div className="doctor-details">
-                    <p><strong>📧 Email:</strong> {hospitalData?.email}</p>
-                    <p><strong>📞 Phone:</strong> {hospitalData?.phone}</p>
-                    <p><strong>📍 Address:</strong> {hospitalData?.address}</p>
-                    <p><strong>🏙️ City:</strong> {hospitalData?.city}</p>
-                    <p><strong>📮 Pincode:</strong> {hospitalData?.pincode}</p>
-                    <p><strong>📅 Established:</strong> {hospitalData?.establishedYear || 'N/A'}</p>
-                    <p><strong>⭐ Rating:</strong> {hospitalData?.rating || 'N/A'}</p>
-                    <p><strong>📝 Description:</strong> {hospitalData?.description || 'No description available'}</p>
-                  </div>
+                </div>
+                <div className="profile-details">
+                  <p><strong>Doctor ID:</strong> {doctorData?.doctorId || 'N/A'}</p>
+                  <p><strong>Email:</strong> {doctorData?.email || currentUser?.email}</p>
+                  <p><strong>Phone:</strong> {doctorData?.phone || 'Not set'}</p>
+                  <p><strong>Qualification:</strong> {doctorData?.qualification || 'MBBS'}</p>
+                  <p><strong>Registration No:</strong> {doctorData?.registration_no || 'N/A'}</p>
+                  <p><strong>Experience:</strong> {doctorData?.experience_years || 0} years</p>
+                  <p><strong>Department:</strong> {doctorData?.department || 'N/A'}</p>
+                  <p><strong>Consultation Fee:</strong> ₹{doctorData?.consultation_fee || 500}</p>
+                  <p><strong>Online Fee:</strong> ₹{doctorData?.online_fee || 300}</p>
+                  <p><strong>OPD Days:</strong> {doctorData?.opd_days?.join(', ') || 'N/A'}</p>
+                  <p><strong>OPD Time:</strong> {doctorData?.opd_time || 'N/A'}</p>
+                  <p><strong>About:</strong> {doctorData?.bio || 'No description'}</p>
                 </div>
               </div>
             </div>
           )}
         </main>
       </div>
-
-      {/* Add Doctor Modal */}
-      {showAddDoctorModal && (
-        <div className="modal-overlay" onClick={() => setShowAddDoctorModal(false)}>
-          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>➕ Add New Doctor</h2>
-              <button className="close-btn" onClick={() => setShowAddDoctorModal(false)}>×</button>
-            </div>
-            
-            <form onSubmit={handleAddDoctor} className="doctor-form">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Doctor ID *</label>
-                  <input
-                    type="text"
-                    value={newDoctor.doctorId}
-                    onChange={(e) => setNewDoctor({...newDoctor, doctorId: e.target.value})}
-                    placeholder="Auto-generated or enter manually"
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Full Name *</label>
-                  <input
-                    type="text"
-                    value={newDoctor.name}
-                    onChange={(e) => setNewDoctor({...newDoctor, name: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Email *</label>
-                  <input
-                    type="email"
-                    value={newDoctor.email}
-                    onChange={(e) => setNewDoctor({...newDoctor, email: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Phone *</label>
-                  <input
-                    type="tel"
-                    value={newDoctor.phone}
-                    onChange={(e) => setNewDoctor({...newDoctor, phone: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Gender</label>
-                  <select
-                    value={newDoctor.gender}
-                    onChange={(e) => setNewDoctor({...newDoctor, gender: e.target.value})}
-                    className="form-input"
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Date of Birth</label>
-                  <input
-                    type="date"
-                    value={newDoctor.dob}
-                    onChange={(e) => setNewDoctor({...newDoctor, dob: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Specialization *</label>
-                  <select
-                    value={newDoctor.specialization}
-                    onChange={(e) => setNewDoctor({...newDoctor, specialization: e.target.value})}
-                    required
-                    className="form-input"
-                  >
-                    <option value="">Select Specialization</option>
-                    {specializationOptions.map(spec => (
-                      <option key={spec} value={spec}>{spec}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Department *</label>
-                  <input
-                    type="text"
-                    value={newDoctor.department}
-                    onChange={(e) => setNewDoctor({...newDoctor, department: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Qualification</label>
-                  <select
-                    value={newDoctor.qualification}
-                    onChange={(e) => setNewDoctor({...newDoctor, qualification: e.target.value})}
-                    className="form-input"
-                  >
-                    {qualificationOptions.map(qual => (
-                      <option key={qual} value={qual}>{qual}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Registration Number</label>
-                  <input
-                    type="text"
-                    value={newDoctor.registration_no}
-                    onChange={(e) => setNewDoctor({...newDoctor, registration_no: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Experience (Years)</label>
-                  <input
-                    type="number"
-                    value={newDoctor.experience_years}
-                    onChange={(e) => setNewDoctor({...newDoctor, experience_years: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Consultation Fee (₹)</label>
-                  <input
-                    type="number"
-                    value={newDoctor.consultation_fee}
-                    onChange={(e) => setNewDoctor({...newDoctor, consultation_fee: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Online Fee (₹)</label>
-                  <input
-                    type="number"
-                    value={newDoctor.online_fee}
-                    onChange={(e) => setNewDoctor({...newDoctor, online_fee: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>OPD Time</label>
-                  <input
-                    type="text"
-                    value={newDoctor.opd_time}
-                    onChange={(e) => setNewDoctor({...newDoctor, opd_time: e.target.value})}
-                    placeholder="e.g., 09:00-17:00"
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>OPD Days</label>
-                <div className="days-checkbox-group">
-                  {daysList.map(day => (
-                    <label key={day} className="day-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={newDoctor.opd_days.includes(day)}
-                        onChange={() => toggleOpdDay(day, false)}
-                      />
-                      {day}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Bio / About</label>
-                <textarea
-                  value={newDoctor.bio}
-                  onChange={(e) => setNewDoctor({...newDoctor, bio: e.target.value})}
-                  rows="3"
-                  className="form-textarea"
-                  placeholder="Brief description about the doctor..."
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Password *</label>
-                  <input
-                    type="password"
-                    value={newDoctor.password}
-                    onChange={(e) => setNewDoctor({...newDoctor, password: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                  <small>Minimum 6 characters</small>
-                </div>
-                <div className="form-group">
-                  <label>Confirm Password *</label>
-                  <input
-                    type="password"
-                    value={newDoctor.confirmPassword}
-                    onChange={(e) => setNewDoctor({...newDoctor, confirmPassword: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowAddDoctorModal(false)} className="cancel-btn">
-                  Cancel
-                </button>
-                <button type="submit" disabled={loading} className="submit-btn">
-                  {loading ? 'Adding...' : '➕ Add Doctor'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Doctor Modal */}
-      {showEditDoctorModal && selectedDoctor && (
-        <div className="modal-overlay" onClick={() => setShowEditDoctorModal(false)}>
-          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>✏️ Edit Doctor</h2>
-              <button className="close-btn" onClick={() => setShowEditDoctorModal(false)}>×</button>
-            </div>
-            
-            <form onSubmit={handleUpdateDoctor} className="doctor-form">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Doctor ID</label>
-                  <input type="text" value={selectedDoctor.doctorId} disabled className="form-input" />
-                </div>
-                <div className="form-group">
-                  <label>Full Name *</label>
-                  <input
-                    type="text"
-                    value={selectedDoctor.name}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, name: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Email *</label>
-                  <input
-                    type="email"
-                    value={selectedDoctor.email}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, email: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Phone *</label>
-                  <input
-                    type="tel"
-                    value={selectedDoctor.phone}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, phone: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Specialization *</label>
-                  <select
-                    value={selectedDoctor.specialization}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, specialization: e.target.value})}
-                    required
-                    className="form-input"
-                  >
-                    <option value="">Select Specialization</option>
-                    {specializationOptions.map(spec => (
-                      <option key={spec} value={spec}>{spec}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Department *</label>
-                  <input
-                    type="text"
-                    value={selectedDoctor.department}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, department: e.target.value})}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Experience (Years)</label>
-                  <input
-                    type="number"
-                    value={selectedDoctor.experience_years}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, experience_years: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Consultation Fee (₹)</label>
-                  <input
-                    type="number"
-                    value={selectedDoctor.consultation_fee}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, consultation_fee: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Online Fee (₹)</label>
-                  <input
-                    type="number"
-                    value={selectedDoctor.online_fee}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, online_fee: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>OPD Time</label>
-                  <input
-                    type="text"
-                    value={selectedDoctor.opd_time}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, opd_time: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>OPD Days</label>
-                <div className="days-checkbox-group">
-                  {daysList.map(day => (
-                    <label key={day} className="day-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedDoctor.opd_days?.includes(day)}
-                        onChange={() => toggleOpdDay(day, true)}
-                      />
-                      {day}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Bio / About</label>
-                <textarea
-                  value={selectedDoctor.bio}
-                  onChange={(e) => setSelectedDoctor({...selectedDoctor, bio: e.target.value})}
-                  rows="3"
-                  className="form-textarea"
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>New Password (optional)</label>
-                  <input
-                    type="password"
-                    value={selectedDoctor.newPassword || ''}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, newPassword: e.target.value})}
-                    className="form-input"
-                  />
-                  <small>Leave blank to keep current password</small>
-                </div>
-                <div className="form-group">
-                  <label>Confirm New Password</label>
-                  <input
-                    type="password"
-                    value={selectedDoctor.confirmNewPassword || ''}
-                    onChange={(e) => setSelectedDoctor({...selectedDoctor, confirmNewPassword: e.target.value})}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowEditDoctorModal(false)} className="cancel-btn">
-                  Cancel
-                </button>
-                <button type="submit" disabled={loading} className="submit-btn">
-                  {loading ? 'Updating...' : '💾 Update Doctor'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default HospitalDashboard;
+export default HospitalDoctorDashboard;

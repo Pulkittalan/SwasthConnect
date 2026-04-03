@@ -4,7 +4,7 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, onSn
 import { useAuth } from '../../contexts/AuthContext';
 import VideoCall from '../../components/videocall/VideoCall';
 import Chat from '../../components/Chat/Chat';
-import './IndependentDoctorDashboard.css';
+import './DoctorDashboard.css';
 
 const IndependentDoctorDashboard = () => {
   const { currentUser } = useAuth();
@@ -46,100 +46,158 @@ const IndependentDoctorDashboard = () => {
   useEffect(() => {
     const fetchDoctorData = async () => {
       if (!currentUser) return;
-      
+
       try {
         setLoading(true);
-        
-        const doctorsRef = collection(db, 'doctors');
-        const q = query(doctorsRef, where('uid', '==', currentUser.uid));
+
+        const doctorsRef = collection(db, "doctors");
+        const q = query(doctorsRef, where("uid", "==", currentUser.uid));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           const doctorDoc = querySnapshot.docs[0];
           const data = doctorDoc.data();
           setDoctorData(data);
           setDoctorId(doctorDoc.id);
-          
+
           await fetchAppointments(doctorDoc.id);
           await fetchPatients(doctorDoc.id);
           await fetchReviews(doctorDoc.id);
           await calculateStats(doctorDoc.id);
           await calculateEarnings(doctorDoc.id);
+        } else {
+          console.log("Doctor not found in doctors collection");
         }
       } catch (error) {
-        console.error('Error fetching doctor data:', error);
+        console.error("Error fetching doctor data:", error);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchDoctorData();
   }, [currentUser]);
-  
+
+  // Update the fetchAppointments function in IndependentDoctorDashboard.jsx
+
   const fetchAppointments = async (doctorIdParam) => {
     if (!doctorIdParam) return;
-    
+
     try {
-      const appointmentsRef = collection(db, 'appointments');
-      const q = query(
-        appointmentsRef,
-        where('doctorId', '==', doctorIdParam)
-      );
-      const snapshot = await getDocs(q);
-      const appointmentsList = snapshot.docs.map(doc => ({
+      console.log("Fetching appointments for doctorId:", doctorIdParam);
+      console.log("Doctor email:", doctorData?.email);
+
+      const appointmentsRef = collection(db, "appointments");
+
+      // Try multiple query strategies
+      let appointmentsList = [];
+
+      // Strategy 1: Query by doctorId
+      const q1 = query(appointmentsRef, where("doctorId", "==", doctorIdParam));
+      const snapshot1 = await getDocs(q1);
+      appointmentsList = snapshot1.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
+
+      // Strategy 2: If no results, try by doctorUid
+      if (appointmentsList.length === 0 && doctorData?.uid) {
+        const q2 = query(
+          appointmentsRef,
+          where("doctorUid", "==", doctorData.uid),
+        );
+        const snapshot2 = await getDocs(q2);
+        appointmentsList = snapshot2.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+      }
+
+      // Strategy 3: If still no results, try by doctorEmail
+      if (appointmentsList.length === 0 && doctorData?.email) {
+        const q3 = query(
+          appointmentsRef,
+          where("doctorEmail", "==", doctorData.email),
+        );
+        const snapshot3 = await getDocs(q3);
+        appointmentsList = snapshot3.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+      }
+
+      // Strategy 4: Get all appointments and filter (fallback)
+      if (appointmentsList.length === 0) {
+        const allAppointments = await getDocs(appointmentsRef);
+        appointmentsList = allAppointments.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .filter(
+            (apt) =>
+              apt.doctorId === doctorIdParam ||
+              apt.doctorUid === doctorData?.uid ||
+              apt.doctorEmail === doctorData?.email,
+          );
+      }
+
+      console.log("Found appointments:", appointmentsList.length);
       setAppointments(appointmentsList);
       return appointmentsList;
     } catch (error) {
-      console.error('Error fetching appointments:', error);
+      console.error("Error fetching appointments:", error);
       return [];
     }
   };
-  
+
   const fetchPatients = async (doctorIdParam) => {
     if (!doctorIdParam) return;
-    
+
     try {
-      const appointmentsRef = collection(db, 'appointments');
-      const q = query(appointmentsRef, where('doctorId', '==', doctorIdParam));
+      const appointmentsRef = collection(db, "appointments");
+      const q = query(appointmentsRef, where("doctorId", "==", doctorIdParam));
       const snapshot = await getDocs(q);
-      
-      const patientIds = [...new Set(
-        snapshot.docs.map(doc => {
-          const data = doc.data();
-          return data.patientId || data.userId;
-        }).filter(Boolean)
-      )];
-      
+
+      const patientIds = [
+        ...new Set(
+          snapshot.docs
+            .map((doc) => {
+              const data = doc.data();
+              return data.patientId || data.userId;
+            })
+            .filter(Boolean),
+        ),
+      ];
+
       const patientsList = [];
       for (const patientId of patientIds) {
         try {
-          const patientRef = doc(db, 'users', patientId);
+          const patientRef = doc(db, "users", patientId);
           const patientSnap = await getDoc(patientRef);
           if (patientSnap.exists()) {
             patientsList.push({
               id: patientId,
-              ...patientSnap.data()
+              ...patientSnap.data(),
             });
           } else {
-            const appointment = snapshot.docs.find(doc => 
-              (doc.data().patientId === patientId || doc.data().userId === patientId)
-            )?.data();
+            const appointment = snapshot.docs
+              .find(
+                (doc) =>
+                  doc.data().patientId === patientId ||
+                  doc.data().userId === patientId,
+              )
+              ?.data();
             patientsList.push({
               id: patientId,
-              displayName: appointment?.patientName || 'Patient',
-              email: appointment?.patientEmail || 'N/A'
+              displayName: appointment?.patientName || "Patient",
+              email: appointment?.patientEmail || "N/A",
             });
           }
         } catch (err) {
-          console.error('Error fetching patient:', patientId, err);
+          console.error("Error fetching patient:", patientId, err);
         }
       }
       setPatients(patientsList);
     } catch (error) {
-      console.error('Error fetching patients:', error);
+      console.error("Error fetching patients:", error);
     }
   };
   
@@ -219,7 +277,6 @@ const IndependentDoctorDashboard = () => {
       const completed = appointmentsList.filter(a => a.status === 'completed').length * fee;
       const pending = (appointmentsList.filter(a => a.status !== 'completed').length) * fee;
       
-      // Calculate this month's earnings
       const now = new Date();
       const thisMonth = appointmentsList.filter(a => {
         const aptDate = new Date(a.date);
@@ -363,6 +420,7 @@ const IndependentDoctorDashboard = () => {
         diagnosis: selectedPatient.reason || '',
         appointmentId: selectedPatient.id,
         clinicName: doctorData?.clinicName,
+        clinicAddress: doctorData?.clinicAddress,
         createdAt: new Date(),
         createdBy: doctorId
       });
@@ -406,17 +464,18 @@ const IndependentDoctorDashboard = () => {
   
   if (loading) {
     return (
-      <div className="independent-doctor-dashboard">
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div className="doctor-dashboard">
+        <div className="loading-container">
           <div className="loading-spinner"></div>
-          <p style={{ marginLeft: '15px' }}>Loading independent doctor dashboard...</p>
+          <p>Loading dashboard...</p>
         </div>
       </div>
     );
   }
   
   return (
-    <div className="independent-doctor-dashboard">
+    <div className="doctor-dashboard">
+      {/* Video Call Modal */}
       {showVideoCall && activeCallRoom && (
         <div className="modal-overlay">
           <div className="modal-content video-call-modal">
@@ -426,6 +485,7 @@ const IndependentDoctorDashboard = () => {
         </div>
       )}
       
+      {/* Chat Modal */}
       {showChat && activeChat && selectedPatientForChat && (
         <div className="modal-overlay">
           <div className="modal-content chat-modal">
@@ -435,13 +495,13 @@ const IndependentDoctorDashboard = () => {
         </div>
       )}
       
-      <header className="dashboard-header independent-header">
+      <header className="dashboard-header">
         <div className="header-left">
           <h1>🏪 Independent Doctor Dashboard</h1>
           <div className="doctor-info">
-            <img src={doctorData?.profilePhoto || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} alt="Doctor" className="doctor-avatar" />
+            <img src={doctorData?.profilePhoto || doctorData?.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} alt="Doctor" className="doctor-avatar" onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"; }} />
             <div>
-              <h3>Dr. {doctorData?.name || 'Doctor'}</h3>
+              <h3>Dr. {doctorData?.name || 'Doctor'} <span className="independent-badge">Independent</span></h3>
               <p>{doctorData?.specialization || 'General Physician'}</p>
               {doctorData?.clinicName && <p className="clinic-name">🏥 {doctorData.clinicName}</p>}
             </div>
@@ -491,14 +551,16 @@ const IndependentDoctorDashboard = () => {
             <div className="stat-item"><span className="stat-label">Appointments:</span><span className="stat-value">{stats.totalAppointments}</span></div>
             <div className="stat-item"><span className="stat-label">Completed:</span><span className="stat-value">{stats.completedAppointments}</span></div>
             <div className="stat-item"><span className="stat-label">Pending:</span><span className="stat-value">{stats.pendingAppointments}</span></div>
+            <div className="stat-item"><span className="stat-label">Total Patients:</span><span className="stat-value">{stats.totalPatients}</span></div>
             <div className="stat-item"><span className="stat-label">Rating:</span><span className="stat-value">⭐ {stats.averageRating.toFixed(1)}</span></div>
           </div>
         </aside>
         
         <main className="dashboard-main">
+          {/* Appointments Tab */}
           {activeTab === 'appointments' && (
             <div className="tab-content">
-              <h2>Upcoming Appointments</h2>
+              <h2>📅 Upcoming Appointments</h2>
               <div className="appointments-grid">
                 {appointments.filter(a => a.status === 'scheduled' || a.status === 'confirmed').map(appointment => {
                   const patientId = getPatientId(appointment);
@@ -513,7 +575,10 @@ const IndependentDoctorDashboard = () => {
                       <div className="appointment-actions">
                         <button className="start-consultation-btn" onClick={() => handleStartConsultation(appointment)}>Start Consultation</button>
                         <button className="video-call-btn" onClick={() => initVideoCall(patientId, appointment.patientName)}>📹 Video Call</button>
-                        <button className="chat-btn" onClick={() => initChat(patientId, appointment.patientName)}>💬 Chat</button>
+                        <button className="chat-btn" onClick={() => initChat(patientId, appointment.patientName)}>
+                          💬 Chat
+                          {unreadMessages[patientId] > 0 && <span className="unread-count">{unreadMessages[patientId]}</span>}
+                        </button>
                       </div>
                     </div>
                   );
@@ -523,7 +588,7 @@ const IndependentDoctorDashboard = () => {
                 )}
               </div>
               
-              <h2 style={{ marginTop: '40px' }}>Past Appointments</h2>
+              <h2 style={{ marginTop: '40px' }}>📋 Past Appointments</h2>
               <div className="appointments-grid">
                 {appointments.filter(a => a.status === 'completed' || a.status === 'cancelled').map(appointment => {
                   const patientId = getPatientId(appointment);
@@ -545,9 +610,10 @@ const IndependentDoctorDashboard = () => {
             </div>
           )}
           
+          {/* Consultation Tab */}
           {activeTab === 'consultation' && (
             <div className="tab-content consultation-tab">
-              <h2>Patient Consultation</h2>
+              <h2>📋 Patient Consultation</h2>
               {selectedPatient ? (
                 <div>
                   <div className="consultation-header">
@@ -557,6 +623,8 @@ const IndependentDoctorDashboard = () => {
                   <div className="consultation-info">
                     <h4>Patient Information</h4>
                     <p><strong>Name:</strong> {selectedPatient.patientName}</p>
+                    <p><strong>Email:</strong> {selectedPatient.patientEmail || 'N/A'}</p>
+                    <p><strong>Phone:</strong> {selectedPatient.patientPhone || 'N/A'}</p>
                     <p><strong>Reason:</strong> {selectedPatient.reason || 'General consultation'}</p>
                   </div>
                   <div className="consultation-actions">
@@ -575,9 +643,10 @@ const IndependentDoctorDashboard = () => {
             </div>
           )}
           
+          {/* Prescription Tab */}
           {activeTab === 'prescription' && (
             <div className="tab-content">
-              <h2>Prescription Editor</h2>
+              <h2>📝 Prescription Editor</h2>
               {selectedPatient ? (
                 <div className="prescription-editor">
                   <div className="prescription-header">
@@ -608,9 +677,10 @@ const IndependentDoctorDashboard = () => {
             </div>
           )}
           
+          {/* Patients Tab */}
           {activeTab === 'patients' && (
             <div className="tab-content">
-              <h2>My Patients</h2>
+              <h2>👥 My Patients</h2>
               <div className="patients-table">
                 <table>
                   <thead>
@@ -635,9 +705,10 @@ const IndependentDoctorDashboard = () => {
             </div>
           )}
           
+          {/* Earnings Tab */}
           {activeTab === 'earnings' && (
             <div className="tab-content">
-              <h2>Earnings Overview</h2>
+              <h2>💰 Earnings Overview</h2>
               <div className="earnings-grid">
                 <div className="earning-card total">
                   <h3>Total Earnings</h3>
@@ -663,9 +734,10 @@ const IndependentDoctorDashboard = () => {
             </div>
           )}
           
+          {/* Reviews Tab */}
           {activeTab === 'reviews' && (
             <div className="tab-content">
-              <h2>Patient Reviews</h2>
+              <h2>⭐ Patient Reviews</h2>
               {reviews.length > 0 ? reviews.map(review => (
                 <div key={review.id} className="review-card">
                   <div className="review-header"><strong>{review.patientName}</strong><span className="review-rating">{'⭐'.repeat(Math.floor(review.rating || 0))} ({(review.rating || 0).toFixed(1)})</span></div>
@@ -676,27 +748,31 @@ const IndependentDoctorDashboard = () => {
             </div>
           )}
           
+          {/* Profile Tab */}
           {activeTab === 'profile' && (
             <div className="tab-content">
-              <h2>Doctor Profile</h2>
+              <h2>👤 Doctor Profile</h2>
               <div className="profile-view">
                 <div className="profile-header">
-                  <img src={doctorData?.profilePhoto || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} alt="Profile" className="profile-avatar" />
+                  <img src={doctorData?.profilePhoto || doctorData?.photo_url || "https://cdn-icons-png.flaticon.com/512/3304/3304567.png"} alt="Profile" className="profile-avatar" />
                   <div>
                     <h3>Dr. {doctorData?.name || 'Doctor'}</h3>
                     <p>{doctorData?.specialization || 'General Physician'}</p>
-                    <p className="clinic-tag">🏥 {doctorData?.clinicName || 'Independent Practice'}</p>
+                    {doctorData?.clinicName && <p className="clinic-name">🏥 {doctorData.clinicName}</p>}
                   </div>
                 </div>
                 <div className="profile-details">
+                  <p><strong>Doctor ID:</strong> {doctorData?.doctorId || 'N/A'}</p>
                   <p><strong>Email:</strong> {doctorData?.email || currentUser?.email}</p>
                   <p><strong>Phone:</strong> {doctorData?.phone || 'Not set'}</p>
                   <p><strong>Qualification:</strong> {doctorData?.qualification || 'MBBS'}</p>
                   <p><strong>Registration No:</strong> {doctorData?.registration_no || 'N/A'}</p>
-                  <p><strong>Experience:</strong> {doctorData?.totalExperienceYears || doctorData?.experience_years || 0} years</p>
-                  <p><strong>Consultation Fee:</strong> ₹{doctorData?.consultation_fee || 500}</p>
+                  <p><strong>Experience:</strong> {doctorData?.experience_years || 0} years</p>
+                  <p><strong>Clinic Name:</strong> {doctorData?.clinicName || 'N/A'}</p>
                   <p><strong>Clinic Address:</strong> {doctorData?.clinicAddress || 'Not set'}</p>
                   <p><strong>Clinic City:</strong> {doctorData?.clinicCity || 'N/A'}</p>
+                  <p><strong>Consultation Fee:</strong> ₹{doctorData?.consultation_fee || 500}</p>
+                  <p><strong>Online Fee:</strong> ₹{doctorData?.online_fee || 300}</p>
                   <p><strong>About:</strong> {doctorData?.bio || doctorData?.qualificationDetails || 'No description'}</p>
                 </div>
               </div>
