@@ -1,5 +1,4 @@
-// src/components/Chat/Chat.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../../firebase/firebase';
 import { 
   collection, 
@@ -9,7 +8,9 @@ import {
   addDoc, 
   serverTimestamp, 
   updateDoc, 
-  doc 
+  doc,
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
 import './Chat.css';
 
@@ -26,6 +27,44 @@ const Chat = ({ chatId, currentUser, otherUser, userType, onVideoCall }) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Initialize chat if it doesn't exist
+  const initializeChat = useCallback(async () => {
+    if (!chatId || !currentUser || !otherUser) return;
+    
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await getDoc(chatRef);
+      
+      if (!chatDoc.exists()) {
+        await setDoc(chatRef, {
+          participants: [currentUser.uid, otherUser.id],
+          participantNames: {
+            [currentUser.uid]: currentUser.displayName || userType,
+            [otherUser.id]: otherUser.name
+          },
+          participantTypes: {
+            [currentUser.uid]: userType,
+            [otherUser.id]: otherUser.id?.startsWith('doc') ? 'doctor' : 'patient'
+          },
+          createdAt: serverTimestamp(),
+          lastMessage: '',
+          lastMessageTime: serverTimestamp(),
+          unreadCount: {
+            [currentUser.uid]: 0,
+            [otherUser.id]: 0
+          }
+        });
+        console.log('Chat initialized successfully');
+      }
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+    }
+  }, [chatId, currentUser, otherUser, userType]);
+
+  useEffect(() => {
+    initializeChat();
+  }, [initializeChat]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -53,7 +92,7 @@ const Chat = ({ chatId, currentUser, otherUser, userType, onVideoCall }) => {
       });
       
       // Update unread count in chat document
-      if (unreadMessages.length > 0) {
+      if (unreadMessages.length > 0 && otherUser) {
         updateDoc(doc(db, 'chats', chatId), {
           [`unreadCount.${currentUser.uid}`]: 0
         });
@@ -61,7 +100,7 @@ const Chat = ({ chatId, currentUser, otherUser, userType, onVideoCall }) => {
     });
 
     return () => unsubscribe();
-  }, [chatId, currentUser.uid]);
+  }, [chatId, currentUser.uid, otherUser]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -84,7 +123,7 @@ const Chat = ({ chatId, currentUser, otherUser, userType, onVideoCall }) => {
         lastMessage: newMessage.trim(),
         lastMessageTime: serverTimestamp(),
         lastSenderId: currentUser.uid,
-        [`unreadCount.${otherUser.id}`]: serverTimestamp()
+        [`unreadCount.${otherUser?.id}`]: serverTimestamp()
       });
 
       setNewMessage('');

@@ -9,7 +9,10 @@ import {
   onSnapshot,
   getDoc,
   query,
-  where
+  where,
+  deleteDoc,
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import './VideoCall.css';
 
@@ -28,8 +31,10 @@ const VideoCall = ({
   const [connectionStatus, setConnectionStatus] = useState('connecting');
   const [error, setError] = useState(null);
   const [otherParticipant, setOtherParticipant] = useState(null);
+  const [isInitiator, setIsInitiator] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(true);
+  const [networkQuality, setNetworkQuality] = useState('good');
 
-  // Use refs for streams to prevent re-renders
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -38,6 +43,7 @@ const VideoCall = ({
   const callStartTimeRef = useRef(null);
   const unsubscribeSignalsRef = useRef(null);
   const isMountedRef = useRef(true);
+  const signalingCompleteRef = useRef(false);
 
   const configuration = {
     iceServers: [
@@ -53,14 +59,19 @@ const VideoCall = ({
         urls: 'turn:openrelay.metered.ca:443',
         username: 'openrelayproject',
         credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
       }
     ],
     iceCandidatePoolSize: 10
   };
 
-  // Cleanup function
   const cleanup = useCallback(() => {
-    // Stop all tracks in local stream
+    console.log('Cleaning up video call resources...');
+    
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
         if (track.readyState === 'live') {
@@ -70,30 +81,31 @@ const VideoCall = ({
       localStreamRef.current = null;
     }
 
-    // Close peer connection
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
 
-    // Clear interval
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
       durationIntervalRef.current = null;
     }
 
-    // Unsubscribe from signals
     if (unsubscribeSignalsRef.current) {
       unsubscribeSignalsRef.current();
       unsubscribeSignalsRef.current = null;
     }
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
   }, []);
 
-  // Initialize local stream ONCE
   const initLocalStream = useCallback(async () => {
-    // Don't re-initialize if we already have a stream
     if (localStreamRef.current) {
-      console.log('Local stream already exists');
       return localStreamRef.current;
     }
 
@@ -103,7 +115,8 @@ const VideoCall = ({
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
-          height: { ideal: 720 }
+          height: { ideal: 720 },
+          facingMode: 'user'
         },
         audio: {
           echoCancellation: true,
@@ -112,11 +125,10 @@ const VideoCall = ({
         }
       });
       
-      console.log('Camera access granted');
+      console.log('Media access granted');
       localStreamRef.current = stream;
       
-      // Set video to local element only once
-      if (localVideoRef.current && localVideoRef.current.srcObject !== stream) {
+      if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
       
@@ -124,41 +136,80 @@ const VideoCall = ({
     } catch (err) {
       console.error('Error accessing media devices:', err);
       
+      let errorMessage = 'Unable to access camera/microphone. ';
       if (err.name === 'NotAllowedError') {
-        setError('Camera/Microphone access denied. Please allow access in browser settings.');
+        errorMessage += 'Please allow camera and microphone access in your browser settings.';
       } else if (err.name === 'NotFoundError') {
-        setError('No camera or microphone found.');
+        errorMessage += 'No camera or microphone found. Please check your devices.';
+      } else if (err.name === 'NotReadableError') {
+        errorMessage += 'Camera or microphone is already in use by another application.';
       } else {
-        setError(`Unable to access camera/microphone: ${err.message}`);
+        errorMessage += err.message;
       }
       
+      setError(errorMessage);
+      setIsConnecting(false);
       return null;
     }
   }, []);
 
+  const serializeCandidate = (candidate) => {
+    if (!candidate) return null;
+    return {
+      candidate: candidate.candidate,
+      sdpMid: candidate.sdpMid,
+      sdpMLineIndex: candidate.sdpMLineIndex,
+      usernameFragment: candidate.usernameFragment
+    };
+  };
+
+  const deserializeCandidate = (serialized) => {
+    if (!serialized) return null;
+    return new RTCIceCandidate(serialized);
+  };
+
   const sendSignal = useCallback(async (signal) => {
     try {
+      let signalData = { ...signal };
+      
+      if (signal.candidate) {
+        signalData.candidate = serializeCandidate(signal.candidate);
+      }
+      
+      if (signal.offer) {
+        signalData.offer = {
+          type: signal.offer.type,
+          sdp: signal.offer.sdp
+        };
+      }
+      
+      if (signal.answer) {
+        signalData.answer = {
+          type: signal.answer.type,
+          sdp: signal.answer.sdp
+        };
+      }
+      
       const signalsRef = collection(db, 'calls', roomId, 'signals');
       await addDoc(signalsRef, {
-        ...signal,
+        ...signalData,
         from: currentUser.uid,
         timestamp: serverTimestamp()
       });
+      console.log('Signal sent:', signal.type);
     } catch (error) {
       console.error('Error sending signal:', error);
     }
   }, [roomId, currentUser.uid]);
 
-  const setupPeerConnection = useCallback(async (stream) => {
+  const setupPeerConnection = useCallback(async (stream, isInitiatorRole) => {
     if (peerConnectionRef.current) {
-      console.log('Peer connection already exists');
       return peerConnectionRef.current;
     }
 
     const pc = new RTCPeerConnection(configuration);
     peerConnectionRef.current = pc;
 
-    // Add tracks from stream
     stream.getTracks().forEach(track => {
       console.log(`Adding ${track.kind} track`);
       pc.addTrack(track, stream);
@@ -175,7 +226,7 @@ const VideoCall = ({
     };
 
     pc.onicecandidate = async (event) => {
-      if (event.candidate) {
+      if (event.candidate && isMountedRef.current) {
         await sendSignal({
           type: 'candidate',
           candidate: event.candidate
@@ -190,8 +241,10 @@ const VideoCall = ({
       if (state === 'connected' || state === 'completed') {
         setConnectionStatus('connected');
         setIsCallActive(true);
+        setIsConnecting(false);
         if (!callStartTimeRef.current) {
           callStartTimeRef.current = Date.now();
+          if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
           durationIntervalRef.current = setInterval(() => {
             if (callStartTimeRef.current && isMountedRef.current) {
               setCallDuration(Math.floor((Date.now() - callStartTimeRef.current) / 1000));
@@ -200,6 +253,21 @@ const VideoCall = ({
         }
       } else if (state === 'failed') {
         setError('Connection failed. Please try again.');
+        setIsConnecting(false);
+      } else if (state === 'disconnected') {
+        console.log('ICE disconnected');
+        setConnectionStatus('disconnected');
+      } else if (state === 'checking') {
+        setConnectionStatus('connecting');
+        setIsConnecting(true);
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed') {
+        setError('Connection failed. Please try again.');
+        setIsConnecting(false);
       }
     };
 
@@ -213,7 +281,7 @@ const VideoCall = ({
       query(signalsRef, where('from', '!=', currentUser.uid)),
       async (snapshot) => {
         for (const change of snapshot.docChanges()) {
-          if (change.type === 'added' && peerConnectionRef.current) {
+          if (change.type === 'added' && peerConnectionRef.current && !signalingCompleteRef.current) {
             const signal = change.doc.data();
             const pc = peerConnectionRef.current;
 
@@ -221,22 +289,35 @@ const VideoCall = ({
               switch (signal.type) {
                 case 'offer':
                   if (!pc.currentRemoteDescription) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
+                    console.log('Received offer, creating answer...');
+                    const offer = new RTCSessionDescription(signal.offer);
+                    await pc.setRemoteDescription(offer);
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
                     await sendSignal({ type: 'answer', answer: answer });
+                    console.log('Answer sent');
                   }
                   break;
 
                 case 'answer':
-                  if (!pc.currentRemoteDescription) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
+                  if (!pc.currentRemoteDescription && pc.localDescription?.type === 'offer') {
+                    console.log('Received answer, setting remote description...');
+                    const answer = new RTCSessionDescription(signal.answer);
+                    await pc.setRemoteDescription(answer);
+                    signalingCompleteRef.current = true;
                   }
                   break;
 
                 case 'candidate':
                   if (signal.candidate) {
-                    await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                    try {
+                      const candidate = deserializeCandidate(signal.candidate);
+                      if (candidate) {
+                        await pc.addIceCandidate(candidate);
+                      }
+                    } catch (e) {
+                      console.warn('Error adding ICE candidate:', e);
+                    }
                   }
                   break;
               }
@@ -253,14 +334,15 @@ const VideoCall = ({
     const stream = await initLocalStream();
     if (!stream) return;
 
-    const pc = await setupPeerConnection(stream);
+    const pc = await setupPeerConnection(stream, true);
     await listenForSignals();
 
+    console.log('Creating offer...');
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     await sendSignal({ type: 'offer', offer: offer });
     
-    console.log('Offer sent');
+    console.log('Offer sent, waiting for answer...');
 
     await updateDoc(doc(db, 'calls', roomId), {
       status: 'active',
@@ -272,10 +354,10 @@ const VideoCall = ({
     const stream = await initLocalStream();
     if (!stream) return;
 
-    await setupPeerConnection(stream);
+    await setupPeerConnection(stream, false);
     await listenForSignals();
     
-    console.log('Waiting for offer...');
+    console.log('Joined call, waiting for offer...');
 
     await updateDoc(doc(db, 'calls', roomId), {
       status: 'active',
@@ -312,7 +394,6 @@ const VideoCall = ({
   const handleEndCall = useCallback(async () => {
     console.log('Ending call...');
     
-    // Update call status in Firestore
     try {
       await updateDoc(doc(db, 'calls', roomId), {
         status: 'ended',
@@ -328,16 +409,53 @@ const VideoCall = ({
         duration: callDuration,
         endedAt: new Date()
       });
+      
+      const signalsRef = collection(db, 'calls', roomId, 'signals');
+      const signalsSnapshot = await getDocs(signalsRef);
+      const batch = writeBatch(db);
+      signalsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      
     } catch (error) {
       console.error('Error ending call:', error);
     }
 
-    // Cleanup
     cleanup();
     setIsCallActive(false);
     
     if (onClose) onClose();
   }, [roomId, currentUser.uid, userName, userType, callDuration, onClose, cleanup]);
+
+  // Network quality monitoring
+  useEffect(() => {
+    if (!peerConnectionRef.current) return;
+    
+    const pc = peerConnectionRef.current;
+    
+    const checkNetworkQuality = setInterval(() => {
+      if (pc && pc.getStats) {
+        pc.getStats().then(stats => {
+          let rtt = null;
+          
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && report.nominated) {
+              rtt = report.currentRoundTripTime;
+            }
+          });
+          
+          if (rtt) {
+            if (rtt < 0.1) setNetworkQuality('good');
+            else if (rtt < 0.3) setNetworkQuality('poor');
+            else setNetworkQuality('bad');
+          }
+        }).catch(console.error);
+      }
+    }, 5000);
+    
+    return () => clearInterval(checkNetworkQuality);
+  }, [peerConnectionRef.current]);
 
   // Fetch other participant info
   useEffect(() => {
@@ -348,7 +466,10 @@ const VideoCall = ({
         
         if (callDoc.exists()) {
           const callData = callDoc.data();
-          if (callData.initiator === currentUser.uid) {
+          const isInitiatorRole = callData.initiator === currentUser.uid;
+          setIsInitiator(isInitiatorRole);
+          
+          if (isInitiatorRole) {
             setOtherParticipant({
               id: callData.participant,
               name: callData.participantName
@@ -371,6 +492,7 @@ const VideoCall = ({
   // Initialize call
   useEffect(() => {
     isMountedRef.current = true;
+    signalingCompleteRef.current = false;
     
     const initCall = async () => {
       try {
@@ -378,6 +500,7 @@ const VideoCall = ({
         
         if (!callDoc.exists()) {
           setError('Call session not found');
+          setIsConnecting(false);
           return;
         }
         
@@ -391,6 +514,7 @@ const VideoCall = ({
       } catch (error) {
         console.error('Error initializing call:', error);
         setError('Failed to initialize call');
+        setIsConnecting(false);
       }
     };
 
@@ -404,6 +528,24 @@ const VideoCall = ({
     };
   }, [roomId, currentUser, startCall, joinCall, cleanup]);
 
+  const getNetworkQualityClass = () => {
+    switch(networkQuality) {
+      case 'good': return 'good';
+      case 'poor': return 'poor';
+      case 'bad': return 'bad';
+      default: return 'good';
+    }
+  };
+
+  const getNetworkQualityText = () => {
+    switch(networkQuality) {
+      case 'good': return '📶 Good Connection';
+      case 'poor': return '⚠️ Poor Connection';
+      case 'bad': return '❌ Bad Connection';
+      default: return '📶 Connecting...';
+    }
+  };
+
   return (
     <div className="video-call-container">
       {error && (
@@ -414,7 +556,6 @@ const VideoCall = ({
       )}
 
       <div className="video-grid">
-        {/* Remote Video */}
         <div className="remote-video-wrapper">
           <video
             ref={remoteVideoRef}
@@ -422,16 +563,23 @@ const VideoCall = ({
             playsInline
             className="remote-video"
           />
-          {connectionStatus === 'connecting' && !error && (
+          {isConnecting && !error && (
             <div className="connecting-overlay">
               <div className="spinner"></div>
               <p>Connecting to {otherParticipant?.name || 'doctor'}...</p>
+              <p className="sub-text">
+                {isInitiator ? 'Initiating call...' : 'Waiting for response...'}
+              </p>
+            </div>
+          )}
+          {connectionStatus === 'connected' && (
+            <div className={`network-quality ${getNetworkQualityClass()}`}>
+              {getNetworkQualityText()}
             </div>
           )}
           <div className="remote-label">{otherParticipant?.name || 'Doctor'}</div>
         </div>
 
-        {/* Local Video (Picture-in-Picture) */}
         <div className="local-video-wrapper">
           <video
             ref={localVideoRef}
@@ -449,7 +597,6 @@ const VideoCall = ({
         </div>
       </div>
 
-      {/* Call Controls */}
       <div className="call-controls">
         <div className="call-timer">
           {isCallActive ? formatDuration(callDuration) : 'Connecting...'}

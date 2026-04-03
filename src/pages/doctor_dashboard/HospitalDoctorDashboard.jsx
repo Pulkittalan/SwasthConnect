@@ -94,75 +94,75 @@ const HospitalDoctorDashboard = () => {
     fetchDoctorData();
   }, [currentUser]);
 
+  const ensureAppointmentsHavePatientId = async () => {
+  // Fix any appointments missing patientId field
+  if (!doctorId) return;
+  
+  try {
+    const appointmentsRef = collection(db, "appointments");
+    const q = query(appointmentsRef, where("doctorId", "==", doctorId));
+    const snapshot = await getDocs(q);
+    
+    for (const docSnap of snapshot.docs) {
+      const data = docSnap.data();
+      // If appointment has userId but not patientId, update it
+      if (data.userId && !data.patientId) {
+        await updateDoc(docSnap.ref, { patientId: data.userId });
+        console.log("Fixed appointment:", docSnap.id);
+      }
+    }
+  } catch (error) {
+    console.error("Error fixing appointments:", error);
+  }
+};
+
   // Update the fetchAppointments function in HospitalDoctorDashboard.jsx
 
   const fetchAppointments = async (doctorIdParam) => {
-    if (!doctorIdParam) return;
+  if (!doctorIdParam) return;
 
-    try {
-      console.log("Fetching appointments for doctorId:", doctorIdParam);
-      console.log("Doctor email:", doctorData?.email);
-
-      const appointmentsRef = collection(db, "appointments");
-
-      // Try multiple query strategies
-      let appointmentsList = [];
-
-      // Strategy 1: Query by doctorId (both field names)
-      const q1 = query(appointmentsRef, where("doctorId", "==", doctorIdParam));
-      const snapshot1 = await getDocs(q1);
-      appointmentsList = snapshot1.docs.map((doc) => ({
+  try {
+    // First, ensure appointments have patientId
+    await ensureAppointmentsHavePatientId();
+    
+    console.log("Fetching appointments for doctorId:", doctorIdParam);
+    
+    const appointmentsRef = collection(db, "appointments");
+    
+    // Query by doctorId (Firestore document ID)
+    const q1 = query(appointmentsRef, where("doctorId", "==", doctorIdParam));
+    const snapshot1 = await getDocs(q1);
+    let appointmentsList = snapshot1.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    
+    // Also query by doctorUid if available
+    if (doctorData?.uid) {
+      const q2 = query(appointmentsRef, where("doctorUid", "==", doctorData.uid));
+      const snapshot2 = await getDocs(q2);
+      const moreAppointments = snapshot2.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-
-      // Strategy 2: If no results, try by doctorUid
-      if (appointmentsList.length === 0 && doctorData?.uid) {
-        const q2 = query(
-          appointmentsRef,
-          where("doctorUid", "==", doctorData.uid),
-        );
-        const snapshot2 = await getDocs(q2);
-        appointmentsList = snapshot2.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-      }
-
-      // Strategy 3: If still no results, try by doctorEmail
-      if (appointmentsList.length === 0 && doctorData?.email) {
-        const q3 = query(
-          appointmentsRef,
-          where("doctorEmail", "==", doctorData.email),
-        );
-        const snapshot3 = await getDocs(q3);
-        appointmentsList = snapshot3.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-      }
-
-      // Strategy 4: Get all appointments and filter (fallback)
-      if (appointmentsList.length === 0) {
-        const allAppointments = await getDocs(appointmentsRef);
-        appointmentsList = allAppointments.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter(
-            (apt) =>
-              apt.doctorId === doctorIdParam ||
-              apt.doctorUid === doctorData?.uid ||
-              apt.doctorEmail === doctorData?.email,
-          );
-      }
-
-      console.log("Found appointments:", appointmentsList.length);
-      setAppointments(appointmentsList);
-      return appointmentsList;
-    } catch (error) {
-      console.error("Error fetching appointments:", error);
-      return [];
+      
+      // Merge and deduplicate
+      const existingIds = new Set(appointmentsList.map(a => a.id));
+      moreAppointments.forEach(apt => {
+        if (!existingIds.has(apt.id)) {
+          appointmentsList.push(apt);
+        }
+      });
     }
-  };
+    
+    console.log("Found appointments:", appointmentsList.length);
+    setAppointments(appointmentsList);
+    return appointmentsList;
+  } catch (error) {
+    console.error("Error fetching appointments:", error);
+    return [];
+  }
+};
 
   const fetchPatients = async (doctorIdParam) => {
     if (!doctorIdParam) return;

@@ -1,4 +1,5 @@
-/* Additional Chat Styles */
+/* Chat.css - Complete Styles */
+
 .chat-container {
   display: flex;
   flex-direction: column;
@@ -15,6 +16,7 @@
   padding: 15px 20px;
   background: #3498db;
   color: white;
+  flex-shrink: 0;
 }
 
 .chat-header-info {
@@ -52,6 +54,7 @@
 
 .video-call-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.02);
 }
 
 .chat-messages {
@@ -126,6 +129,7 @@
   padding: 15px;
   background: white;
   border-top: 1px solid #e9ecef;
+  flex-shrink: 0;
 }
 
 .chat-input-wrapper {
@@ -160,9 +164,28 @@
 
 .send-btn:hover:not(:disabled) {
   background: #2980b9;
+  transform: scale(1.02);
 }
 
 .send-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Scrollbar Styling */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }

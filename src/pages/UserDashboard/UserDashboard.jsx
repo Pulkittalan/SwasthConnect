@@ -804,112 +804,114 @@ const UserDashboard = () => {
   // Updated handleBookAppointment to support both doctor types
   // In UserDashboard.jsx - Update handleBookAppointment function
   const handleBookAppointment = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!selectedDoctor || !appointmentDate || !appointmentTime) {
-      setBookingError("Please fill in all required fields");
+  if (!selectedDoctor || !appointmentDate || !appointmentTime) {
+    setBookingError("Please fill in all required fields");
+    return;
+  }
+
+  if (doctorType === "hospital" && !selectedHospital) {
+    setBookingError("Please select a hospital");
+    return;
+  }
+
+  setBookingError("");
+  setBookingSuccess("");
+
+  try {
+    const selectedDoctorObj = doctors.find((d) => d.id === selectedDoctor);
+    
+    if (!selectedDoctorObj) {
+      setBookingError("Selected doctor not found");
       return;
     }
 
-    if (doctorType === "hospital" && !selectedHospital) {
-      setBookingError("Please select a hospital");
-      return;
-    }
-
-    setBookingError("");
-    setBookingSuccess("");
-
-    try {
-      const selectedDoctorObj = doctors.find((d) => d.id === selectedDoctor);
-
-      let appointmentData;
-
-      if (doctorType === "independent") {
-        appointmentData = {
-          // Use consistent field names
-          patientId: currentUser.uid, // ← ADD THIS (use patientId, not userId)
-          patientName: userData?.displayName || "User",
-          patientEmail: currentUser.email,
-          patientPhone: userData?.phone || "",
-          doctorId: selectedDoctor,
-          doctorName: selectedDoctorObj?.name || "",
-          doctorEmail: selectedDoctorObj?.email || "",
-          doctorSpecialization: selectedDoctorObj?.specialization || "General",
-          doctorType: "independent",
-          clinicName: selectedDoctorObj?.clinicName || "",
-          clinicAddress: selectedDoctorObj?.clinicAddress || "",
-          clinicCity: selectedDoctorObj?.clinicCity || "",
-          clinicPincode: selectedDoctorObj?.clinicPincode || "",
-          clinicPhone: selectedDoctorObj?.clinicPhone || "",
-          consultationFee:
-            selectedDoctorObj?.consultation_fee ||
-            selectedDoctorObj?.online_fee ||
-            500,
-          date: appointmentDate,
-          time: appointmentTime,
-          reason: appointmentReason,
-          status: "scheduled",
-          createdAt: new Date().toISOString(),
-        };
-      } else {
-        const selectedHospitalObj = hospitals.find(
-          (h) => h.id === selectedHospital,
-        );
-        appointmentData = {
-          // Use consistent field names
-          patientId: currentUser.uid, // ← ADD THIS (use patientId, not userId)
-          patientName: userData?.displayName || "User",
-          patientEmail: currentUser.email,
-          patientPhone: userData?.phone || "",
-          hospitalId: selectedHospital,
-          hospitalName: selectedHospitalObj?.name || "",
-          doctorId: selectedDoctor,
-          doctorName: selectedDoctorObj?.name || "",
-          doctorEmail: selectedDoctorObj?.email || "",
-          doctorSpecialization:
-            selectedDoctorObj?.specialization ||
-            selectedDoctorObj?.department ||
-            "General",
-          doctorType: "hospital",
-          consultationFee:
-            selectedDoctorObj?.consultation_fee ||
-            selectedDoctorObj?.online_fee ||
-            500,
-          date: appointmentDate,
-          time: appointmentTime,
-          reason: appointmentReason,
-          status: "scheduled",
-          createdAt: new Date().toISOString(),
-        };
+    // Get doctor UID - important for matching appointments
+    let doctorUid = selectedDoctorObj.uid || selectedDoctorObj.userId;
+    
+    // If doctor doesn't have uid in the doctor object, fetch it
+    if (!doctorUid) {
+      try {
+        const doctorDoc = await getDoc(doc(db, "doctors", selectedDoctor));
+        if (doctorDoc.exists()) {
+          doctorUid = doctorDoc.data().uid;
+        }
+      } catch (err) {
+        console.error("Error fetching doctor UID:", err);
       }
-
-      const docRef = await addDoc(
-        collection(db, "appointments"),
-        appointmentData,
-      );
-
-      setAppointments((prev) => [
-        {
-          id: docRef.id,
-          ...appointmentData,
-        },
-        ...prev,
-      ]);
-
-      setBookingSuccess("Appointment booked successfully!");
-      setSelectedHospital("");
-      setSelectedDoctor("");
-      setAppointmentDate("");
-      setAppointmentTime("");
-      setAppointmentReason("");
-      setDoctorType("hospital");
-
-      setTimeout(() => setBookingSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error booking appointment:", error);
-      setBookingError("Failed to book appointment. Please try again.");
     }
-  };
+
+    let appointmentData = {
+      // Patient info - IMPORTANT: Use patientId, not userId
+      patientId: currentUser.uid,
+      patientName: userData?.displayName || currentUser?.displayName || "Patient",
+      patientEmail: currentUser.email,
+      patientPhone: userData?.phone || "",
+      
+      // Doctor info - BOTH fields for compatibility
+      doctorId: selectedDoctor,  // Firestore document ID
+      doctorUid: doctorUid || selectedDoctorObj.uid,  // User UID for matching
+      doctorName: selectedDoctorObj?.name || "Doctor",
+      doctorEmail: selectedDoctorObj?.email || "",
+      doctorSpecialization: selectedDoctorObj?.specialization || 
+                           selectedDoctorObj?.department || 
+                           "General Medicine",
+      consultationFee: selectedDoctorObj?.consultation_fee || 
+                      selectedDoctorObj?.online_fee || 500,
+      
+      // Appointment details
+      date: appointmentDate,
+      time: appointmentTime,
+      reason: appointmentReason || "General consultation",
+      status: "scheduled",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Add doctorType specific fields
+    if (doctorType === "independent") {
+      appointmentData.doctorType = "independent";
+      appointmentData.clinicName = selectedDoctorObj?.clinicName || "";
+      appointmentData.clinicAddress = selectedDoctorObj?.clinicAddress || "";
+      appointmentData.clinicCity = selectedDoctorObj?.clinicCity || "";
+      appointmentData.clinicPincode = selectedDoctorObj?.clinicPincode || "";
+      appointmentData.clinicPhone = selectedDoctorObj?.clinicPhone || "";
+    } else {
+      const selectedHospitalObj = hospitals.find((h) => h.id === selectedHospital);
+      appointmentData.doctorType = "hospital";
+      appointmentData.hospitalId = selectedHospital;
+      appointmentData.hospitalName = selectedHospitalObj?.name || "";
+    }
+
+    console.log("Creating appointment with data:", appointmentData);
+    
+    const docRef = await addDoc(collection(db, "appointments"), appointmentData);
+
+    setAppointments((prev) => [
+      {
+        id: docRef.id,
+        ...appointmentData,
+      },
+      ...prev,
+    ]);
+
+    setBookingSuccess("Appointment booked successfully!");
+    
+    // Reset form
+    setSelectedHospital("");
+    setSelectedDoctor("");
+    setAppointmentDate("");
+    setAppointmentTime("");
+    setAppointmentReason("");
+    setDoctorType("hospital");
+
+    setTimeout(() => setBookingSuccess(""), 3000);
+  } catch (error) {
+    console.error("Error booking appointment:", error);
+    setBookingError("Failed to book appointment. Please try again.");
+  }
+};
 
   const getRecordTypeIcon = (type) => {
     switch (type) {

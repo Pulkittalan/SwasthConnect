@@ -734,23 +734,21 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
+/* Modal Content Container */
 .user-dashboard .modal-content {
-  background: white;
+  position: relative;
+  background: transparent;
   border-radius: 16px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 85vh;
-  overflow-y: auto;
-  animation: slideUp 0.3s ease;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 .user-dashboard .modal-header {
@@ -769,24 +767,58 @@
   color: #4074e6;
 }
 
+.user-dashboard .video-call-modal {
+  width: 90vw;
+  max-width: 1200px;
+  height: 85vh;
+  min-height: 500px;
+  background: transparent;
+}
+
+.user-dashboard .chat-modal {
+  width: 400px;
+  height: 600px;
+  max-width: 90%;
+  background: white;
+  border-radius: 12px;
+}
+
+/* Modal Close Button */
 .user-dashboard .modal-close {
-  background: none;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
   border: none;
-  font-size: 28px;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
   cursor: pointer;
-  color: #666;
-  transition: all 0.3s ease;
-  width: 32px;
-  height: 32px;
+  z-index: 20;
+  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
 .user-dashboard .modal-close:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: rgba(231, 76, 60, 0.9);
+  transform: scale(1.05);
+}
+
+/* Video Call Container inside Modal */
+.user-dashboard .video-call-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
 }
 
 .user-dashboard .modal-body {
