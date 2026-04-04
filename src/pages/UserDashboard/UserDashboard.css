@@ -746,6 +746,7 @@
 .user-dashboard .modal-content {
   position: relative;
   background: transparent;
+  height: 100%;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -823,6 +824,7 @@
 
 .user-dashboard .modal-body {
   padding: 25px;
+  height: 100%;
 }
 
 .user-dashboard .search-input-container {
@@ -1109,8 +1111,19 @@
 }
 
 /* Bed Request Modal */
+/* Apply to your modal */
 .user-dashboard .bed-request-modal {
-  max-width: 700px;
+  max-height: 90vh;
+  overflow-y: auto;
+
+  /* 🔥 Hide scrollbar (Chrome, Edge, Safari) */
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE/Edge */
+}
+
+/* Hide scrollbar for WebKit browsers */
+.user-dashboard .bed-request-modal::-webkit-scrollbar {
+  display: none;
 }
 
 .user-dashboard .checkbox-label {
